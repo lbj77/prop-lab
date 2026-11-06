@@ -2069,7 +2069,8 @@ async function autoGrade(){
           const live = s.legs.filter((l,i) => res[i].res === 'hit');
           if (status === 'won' && live.length < s.legs.length) upd.dec = live.reduce((m,l) => m*amToDec(l.odds), 1); }
       }
-      if (JSON.stringify(s.results) === JSON.stringify(res) && !upd.status) continue;
+      const normR = arr => JSON.stringify((arr || []).map(r => r ? [r.res || '', r.v ?? null, r.d ?? null] : null));
+      if (normR(s.results) === normR(res) && !upd.status) continue;   // same results (stored key order can differ)
       Object.assign(s, upd); if (upd.status) n++;
       if (cloud) { try { await cloud.slipsCol.doc(s.id).update(upd); continue; } catch(e){ failed++; } }
       else lsSet(LSP+'slips', S.slips);
