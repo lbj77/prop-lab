@@ -674,7 +674,7 @@ details.inj{margin-top:22px!important}
 <body>
 <header class="top">
   <div class="top-inner">
-    <div class="brand"><h1>Prop<span>Lab</span><small class="lg">NBA</small></h1><nav class="league" aria-label="League"><a href="https://claude.ai/artifact/W7BuAgdfBwykBR6gS97vyG" target="_top" rel="noopener">NBA</a><span class="on">NFL</span></nav></div>
+    <div class="brand"><h1>Prop<span>Lab</span><small class="lg">NBA</small></h1><nav class="league" aria-label="League"><a href="nba.html">NBA</a><span class="on">NFL</span></nav></div>
     <div class="actions">
       <select class="ghost" id="bookSel" aria-label="Which app you’re betting on" hidden></select>
       <button class="btn" id="refreshBtn" title="Load the latest shared picks">↻ Refresh</button>
@@ -3405,6 +3405,7 @@ $('#shareChk').addEventListener('change', async e => {
     viewerIsOwner = user ? !!(await user.isOwner()) : false;
     cloudReadyResolve();
     renderBadge();
+    setTimeout(() => { if (S.data && S.source !== 'sample') labSync(); }, 800);   // load the Strategy lab as soon as the account is connected
     followShared(db);
     if (!user) return;
     const uid = await user.id(); if (!uid) return;
