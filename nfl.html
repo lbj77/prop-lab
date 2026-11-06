@@ -2269,7 +2269,29 @@ async function labBackfill(){
     for (const doc of labDocs) if (have[doc.date] !== doc.res + '|' + (doc.gen || '')) await labPublish(doc);
   } catch(e){}
 }
+let labFilled = false;
+async function labFillMissing(){
+  if (labFilled || !viewerIsOwner) return; labFilled = true;
+  const byName = {}; S.players.forEach(p => byName[normName(p.name)] = p);
+  for (const doc of [...labDocs]) {
+    if (!doc.rows || !doc.rows.some(r => r.split('|').length < 9)) continue;
+    let changed = false;
+    const rows = doc.rows.map((row, i) => {
+      const f = row.split('|'); if (f.length >= 9) return row;
+      while (f.length < 7) f.push('');
+      const pl = byName[normName(f[0])], side = f[3] === 'o' ? 'over' : 'under';
+      let pr = f[7] != null && f[7] !== '' ? +f[7] : null;
+      if ((pr == null || !isFinite(pr)) && pl && STATS[f[2]]) pr = probAt(pl, f[2], +f[4], side, doc.date);
+      f[7] = pr != null && isFinite(pr) ? (+pr).toFixed(3) : '';
+      f[8] = rowGrade(doc, i);
+      changed = true; return f.join('|');
+    });
+    if (changed) await labSave(Object.assign({}, doc, {rows}));
+    await new Promise(r => setTimeout(r, 0));     // keep the page responsive
+  }
+}
 async function labSave(doc){
+  doc = Object.assign({}, doc); delete doc._g;
   const i = labDocs.findIndex(d => d.date === doc.date); if (i >= 0) labDocs[i] = doc; else labDocs.push(doc);
   labPublish(doc);
   if (cloud && cloud.labCol) { try { await cloud.labCol.doc(labKey(doc.date)).set(doc); return; } catch(e){} }
@@ -2283,6 +2305,7 @@ async function labSync(){
     await cloudReady; await labLoad();
     if (labShared()) { computeCalibration(); if (S.tab === 'tracker') renderLab(); renderStratSel(); return; }   // friends just read the shared results
     await labBackfill();
+    await labFillMissing();
     // 1) record today's (and upcoming) leans, refreshing until the games start
     const gen = S.data.generated || S.importedAt || '';
     for (const [date, rows] of Object.entries(labRows())) {
@@ -2370,6 +2393,7 @@ function renderCombos(days){
   $('#confTbl').innerHTML = keys.length ? hd.replace('<th></th>', '<th>Strategies agreeing</th>') + `<tbody>${keys.map(k => row(k === 0 ? 'None' : k >= 5 ? '5 or more' : `${k}`, conf[k], k >= 2 ? `conf:${Math.min(k,4)}` : null)).join('')}</tbody>` : '';
 }
 function renderLab(){
+  if (!labDocs.length && labBusy) { $('#labInfo').textContent = 'Loading your results\u2026'; }
   const per = +(lsGet(LSP+'labPer') ?? 30);
   $$('#labPer button').forEach(b => b.setAttribute('aria-pressed', String(per) === b.dataset.lp));
   const today = ymd(new Date()), cut = per ? ymd(new Date(Date.now() - per*864e5)) : '';
