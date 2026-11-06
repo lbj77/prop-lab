@@ -2305,7 +2305,9 @@ async function labSync(){
     await cloudReady; await labLoad();
     if (labShared()) { computeCalibration(); if (S.tab === 'tracker') renderLab(); renderStratSel(); return; }   // friends just read the shared results
     await labBackfill();
-    await labFillMissing();
+    try { computeCalibration(); } catch(e){}
+    if (S.tab === 'tracker') renderLab();
+    renderStratSel();
     // 1) record today's (and upcoming) leans, refreshing until the games start
     const gen = S.data.generated || S.importedAt || '';
     for (const [date, rows] of Object.entries(labRows())) {
@@ -2326,8 +2328,9 @@ async function labSync(){
       }).join('');
       if (res !== doc.res) await labSave(Object.assign({}, doc, {res}));
     }
-    computeCalibration();
+    try { computeCalibration(); } catch(e){}
     if (S.tab === 'tracker') renderLab();
+    setTimeout(() => { labFillMissing().catch(() => {}); }, 4000);
     renderStratSel(); if (S.tab === 'analyzer') renderStratFit();
   } finally { labBusy = false; }
 }
