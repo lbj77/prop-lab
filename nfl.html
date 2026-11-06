@@ -2246,8 +2246,14 @@ const LAB_PUBLIC = 'public/labmeta/days';
 const labShared = () => !viewerIsOwner && sharedDb;          // friends read the owner's results
 async function labLoad(){
   if (labShared()) { try { const snap = await sharedDb.collection(LAB_PUBLIC).get(); labDocs = snap.docs.map(d => JSON.parse(JSON.stringify(d.data()))).filter(Boolean); return; } catch(e){} }
-  if (cloud && cloud.labCol) { try { const snap = await cloud.labCol.get(); labDocs = snap.docs.map(d => JSON.parse(JSON.stringify(d.data()))).filter(Boolean); return; } catch(e){} }
-  labDocs = lsGet(LSP+'lab') || [];
+  // owner: merge your own copy with the shared copy (imports and other devices may only be in one of them)
+  const merged = {};
+  const add = list => (list || []).forEach(d => { if (!d || !d.date) return; const cur = merged[d.date], done = x => (x.res || '').replace(/\./g, '').length;
+    if (!cur || done(d) > done(cur) || (done(d) === done(cur) && (d.rows || []).length > (cur.rows || []).length)) merged[d.date] = d; });
+  if (cloud && cloud.labCol) { try { const snap = await cloud.labCol.get(); add(snap.docs.map(d => JSON.parse(JSON.stringify(d.data())))); } catch(e){} }
+  if (sharedDb) { try { const snap = await sharedDb.collection(LAB_PUBLIC).get(); add(snap.docs.map(d => JSON.parse(JSON.stringify(d.data())))); } catch(e){} }
+  add(lsGet(LSP+'lab'));
+  labDocs = Object.values(merged).sort((a,b) => a.date < b.date ? -1 : 1);
 }
 async function labPublish(doc){
   if (!viewerIsOwner || !sharedDb) return;
