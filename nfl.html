@@ -1505,6 +1505,7 @@ function computeStale(){
     for (const k of Object.keys(p.lines)) {
       if (!STATS[k] || !sharpFor(p, k, 'over')) continue;
       for (const e of entries(p, k)) for (const side of ['over','under']) {
+        if (!sideOK(k, e.line, side)) continue;
         const price = priceOf(e, side); if (price == null) continue;
         const f = sharpFairAt(p, k, e.line, side); if (!f) continue;
         const edge = f.fair - implied(price);
@@ -1532,7 +1533,10 @@ function renderStale(){
 }
 function entries(p, stat){ const L = p.lines && p.lines[stat]; if (!L || !L.books) return []; return Object.entries(L.books).filter(([b]) => !REF_BOOKS.has(baseBook(b))).map(([b,x]) => ({book:b, base:baseBook(b), line:x.line, over:x.over, under:x.under, dfs:DFS.has(b), alt:!!x.alt || isAlt(b)})); }
 function priceOf(e, side){ if (e.dfs && !e.alt) return decToAm(1/dfsBE(3)); const v = side==='over' ? e.over : e.under; return v && isFinite(v) ? v : null; }
+// anytime-TD unders (0.5) are rarely offered and are a trap to rank: skip them
+const sideOK = (k, line, side) => NBA || !(k === 'TD' && side === 'under' && +line <= .5);
 function chooseLine(p, stat, side, book){
+  if (!NBA && stat === 'TD' && side === 'under') return null;
   let best = null;
   for (const e of entries(p, stat)) {
     if (book !== 'any' && e.base !== book) continue;
@@ -1694,7 +1698,7 @@ function renderRoster(){
       <span class="rh">${hi && hi.n ? hpCell(hi) : `<span class="meta">${f1(mean(vals))} avg</span>`}</span></button>`;
   };
   $('#rosterList').innerHTML = sides.filter(Boolean).map(t => {
-    const fit = x => { if (!filterOn()) return true; const b = bookFor(x, S.stat); if (!b) return false; return ['over','under'].some(sd => { const r = evalProp(x, S.stat, +b.line, sd); const odds = +(sd==='over' ? b.over : b.under) || -110; return fitsStrat({p:x, k:S.stat, line:+b.line, side:sd, odds, r, edge: r.prob - implied(odds), score: r.score}); }); };
+    const fit = x => { if (!filterOn()) return true; const b = bookFor(x, S.stat); if (!b) return false; return ['over','under'].some(sd => { if (!sideOK(S.stat, +b.line, sd)) return false; const r = evalProp(x, S.stat, +b.line, sd); const odds = +(sd==='over' ? b.over : b.under) || -110; return fitsStrat({p:x, k:S.stat, line:+b.line, side:sd, odds, r, edge: r.prob - implied(odds), score: r.score}); }); };
     const ps = (TM[t] || []).filter(fit).slice().sort((a,b) => (!!bookFor(b,S.stat) - !!bookFor(a,S.stat)) || (isOut(a.id) - isOut(b.id)) || (mean(b.games.slice(0,10).map(g=>g.min||0)) - mean(a.games.slice(0,10).map(g=>g.min||0))) || a.name.localeCompare(b.name));
     return `<div class="rteam"><div class="rt-hd"><b>${esc(t)}</b><span class="meta">${ps.length} players${stratOn() ? ` fit “${esc(stratOn().n)}” on ${esc(S.stat)} (over or under)` : `, ${esc(S.side==='over'?'over':'under')} hit rate last 10 at the ${esc(S.stat)} line`}</span></div><div class="rlist">${ps.map(row).join('')}</div></div>`;
   }).join('');
@@ -2232,6 +2236,7 @@ function labRows(){
       const L = p.lines[k]; if (!L) continue;
       const es = entries(p, k).filter(e => !e.alt && e.line === L.line); if (!es.length) continue;
       const side = evalProp(p, k, L.line, 'over').prob >= .5 ? 'over' : 'under';
+      if (!sideOK(k, L.line, side)) continue;
       const prices = es.map(e => priceOf(e, side)).filter(v => v != null); if (!prices.length) continue;
       const odds = prices.reduce((a,b) => amToDec(b) > amToDec(a) ? b : a);
       const r = evalProp(p, k, L.line, side), x = {p, k, line:L.line, side, odds, r, edge: r.prob - implied(odds), score: r.score, book:true};
@@ -2297,12 +2302,20 @@ async function labSave(doc){
   if (cloud && cloud.labCol) { try { await cloud.labCol.doc(labKey(doc.date)).set(doc); return; } catch(e){} }
   lsSet(LSP+'lab', labDocs.slice(-120));
 }
+// NFL: anytime-TD unders (0.5) aren't really bettable, so they're left out of the Strategy lab
+function cleanLabDoc(d){
+  if (!d || !d.rows) return d;
+  const keep = []; d.rows.forEach((r, i) => { const f = r.split('|'); if (sideOK(f[2], +f[4], f[3] === 'o' ? 'over' : 'under')) keep.push(i); });
+  if (keep.length === d.rows.length) return d;
+  return Object.assign({}, d, {rows: keep.map(i => d.rows[i]), res: keep.map(i => (d.res || '')[i] || '.').join('')});
+}
 let labBusy = false;
 async function labSync(){
   if (labBusy || !S.data || S.source === 'sample') return;
   labBusy = true;
   try {
     await cloudReady; await labLoad();
+    if (!NBA) labDocs = labDocs.map(cleanLabDoc);   // drop anytime-TD unders from the record
     if (labShared()) { computeCalibration(); if (S.tab === 'tracker') renderLab(); renderStratSel(); return; }   // friends just read the shared results
     await labBackfill();
     try { computeCalibration(); } catch(e){}
@@ -2785,6 +2798,7 @@ function computeStreaks(pool){
     const b = bookFor(p, k); if (!b) continue;
     const vals = gamesFor(p).map(g => statVal(g, k)); if (vals.length < min) continue;
     for (const side of ['over','under']) {
+      if (!sideOK(k, b.line, side)) continue;
       const odds = +(side==='over' ? b.over : b.under); if (!odds || odds < (S.t.oddsMin ?? -10000)) continue;
       let n = 0; for (const v of vals) { if (side==='over' ? v > b.line : v < b.line) n++; else break; }
       if (n >= min) rows.push({p, k, line:+b.line, side, odds, book:true, bk: (side==='over' ? b.overBook : b.underBook) || b.book, n, seq: hitInfo(vals.slice(0,10), +b.line, side).seq});
