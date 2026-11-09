@@ -483,6 +483,23 @@ button.gc{border:0;cursor:pointer;font:inherit}
 .runrep pre{white-space:pre-wrap;font-size:12px;color:var(--muted);margin:6px 0 0}
 .lweights{display:grid;gap:4px;grid-template-columns:repeat(auto-fill,minmax(230px,1fr))}
 .lw{display:flex;justify-content:space-between;gap:10px;padding:6px 10px;border-radius:8px;background:var(--panel2);font-size:13.5px}
+/* Game model cards */
+.gcards{display:grid;gap:10px;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));margin:10px 0}
+.gcard{border:1px solid var(--line);border-left:4px solid var(--line);border-radius:12px;padding:12px;background:var(--panel)}
+.gcard.agree{border-left-color:var(--over)} .gcard.one{border-left-color:var(--warn)} .gcard.split{border-left-color:#ff8a3d}
+.gc-hd{display:flex;justify-content:space-between;align-items:center;gap:8px;font-family:var(--cond);font-size:20px}
+.gfinal{font-family:var(--body);font-size:12.5px;color:var(--muted)}
+.gmk{margin-top:8px;padding:8px 10px;border-radius:9px;background:var(--panel2)}
+.gmk-h{display:flex;justify-content:space-between;font-size:12.5px;color:var(--muted);font-weight:600}
+.gmk-p{font-size:15px;margin:3px 0 1px}
+.gmk-d{font-size:12px}
+.gsig{font-size:11.5px;padding:1px 8px;border-radius:999px;background:var(--panel)}
+.gsig.agree{color:var(--over);background:var(--over-soft)} .gsig.one{color:var(--warn)} .gsig.split{color:#ff8a3d}
+.gml{margin-top:8px;font-size:12.5px}
+.gres{display:inline-block;min-width:20px;text-align:center;font-weight:800;border-radius:6px;padding:0 5px;font-size:12px;margin-left:6px}
+.gres.w{background:var(--over);color:#002417} .gres.l{background:var(--under);color:#2a0006} .gres.p{background:var(--panel);color:var(--muted)}
+.grec{margin:4px 0 14px;padding:10px 12px;border-radius:12px;background:var(--panel2)}
+.grec table{width:100%}
 /* Strategy filter */
 .stratbar{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;margin:4px 0 8px}
 .stratbar select{max-width:100%}
@@ -703,6 +720,7 @@ details.inj{margin-top:22px!important}
     <div class="row">
       <label class="btn" style="width:auto;cursor:pointer"><span class="cfg-import">Import props_data.json</span><input type="file" id="fileIn" accept=".json,application/json" hidden></label>
       <label class="btn sec" style="width:auto;cursor:pointer">Import injury report (PDF)<input type="file" id="injFile" accept=".pdf,application/pdf,.txt,text/plain" hidden></label>
+      <label class="btn sec" style="width:auto;cursor:pointer">Import game model log (games_log.csv)<input type="file" id="gamesFile" accept=".csv,text/csv" hidden></label>
       <button class="btn sec" id="useSample" style="width:auto">Use sample data</button>
       <label class="mini" style="display:flex;align-items:center;gap:8px;font-size:14px;color:var(--muted)">Show odds as <select class="ghost" id="oddsFmt"></select></label>
       <button class="btn sec" id="useShared" style="width:auto" hidden>Use shared data</button>
@@ -733,6 +751,10 @@ details.inj{margin-top:22px!important}
     <h2 class="sec-h">One pick per game</h2>
     <p class="meta" style="margin:0">The best-value player in each matchup, with his best side on every stat. Tap a line to add it to your parlay.</p>
     <div class="mpicks" id="mpicks"></div>
+    <h2 class="sec-h">Game picks: spread, total, moneyline</h2>
+    <p class="meta" style="margin:0;max-width:85ch" id="gamesSub">From your NBA game model: Four Factors and the Scoring model, side by side.</p>
+    <div class="gcards" id="gameCards"></div>
+    <div id="gameRecord"></div>
     <h2 class="sec-h">Stale lines vs the sharp market</h2>
     <p class="meta" style="margin:0;max-width:85ch" id="staleSub">Lines your apps haven’t moved yet, compared with Pinnacle’s fair price. Tap one to add it to your parlay.</p>
     <div class="prows stalelist" id="stale"></div>
@@ -2819,6 +2841,7 @@ function renderStreaks(pool){
 }
 function renderToday(){
   renderInjury();
+  setTimeout(renderGames, 0);
   setTimeout(renderStale, 0);
   renderStratSel();
   // game-day chips: only players on the chosen day show anywhere
@@ -2890,6 +2913,65 @@ function betGuide(g){
   const side = (team, opp) => { const L = teamLeans(team, opp); return `<div class="g-team"><div class="g-sub">${esc(team)} players</div>${L.overs.length || L.unders.length ? L.overs.map(x => line(x, true)).join('') + L.unders.map(x => line(x, false)).join('') : '<div class="meta">No strong lean.</div>'}</div>`; };
   return `<div class="guide"><div class="g-h">Bet guide</div>${side(g.away, g.home)}${side(g.home, g.away)}</div>`;
 }
+/* ---------- NBA game model (Four Factors + Scoring model) ---------- */
+const NICK = {celtics:'BOS', nets:'BKN', knicks:'NYK', '76ers':'PHI', raptors:'TOR', bulls:'CHI', cavaliers:'CLE', pistons:'DET', pacers:'IND', bucks:'MIL', hawks:'ATL', hornets:'CHA', heat:'MIA', magic:'ORL', wizards:'WAS',
+  nuggets:'DEN', timberwolves:'MIN', thunder:'OKC', blazers:'POR', jazz:'UTA', warriors:'GSW', clippers:'LAC', lakers:'LAL', suns:'PHX', kings:'SAC', mavericks:'DAL', rockets:'HOU', grizzlies:'MEM', pelicans:'NOP', spurs:'SAS'};
+const teamAbbr = name => { const n = String(name || '').toLowerCase(); for (const [k, v] of Object.entries(NICK)) if (n.includes(k)) return v; return String(name || '').slice(0, 3).toUpperCase(); };
+function splitCsv(line){ const out = []; let cur = '', q = false; for (let i = 0; i < line.length; i++) { const ch = line[i]; if (q) { if (ch === '"') { if (line[i+1] === '"') { cur += '"'; i++; } else q = false; } else cur += ch; } else if (ch === '"') q = true; else if (ch === ',') { out.push(cur); cur = ''; } else cur += ch; } out.push(cur); return out; }
+function parseCsv(text){ const lines = String(text).replace(/\r/g, '').split('\n').filter(l => l.trim()); if (!lines.length) return []; const head = splitCsv(lines[0]).map(h => h.trim()); return lines.slice(1).map(l => { const c = splitCsv(l), o = {}; head.forEach((h, i) => o[h] = (c[i] ?? '').trim()); return o; }); }
+let GAMES = lsGet(LSP+'games') || [];
+function setGames(rows, share){
+  GAMES = (Array.isArray(rows) ? rows : []).filter(r => r && r.game_date && r.home_team);
+  lsSet(LSP+'games', GAMES.slice(-1500)); renderGames(); if (S.tab === 'defense') renderDefense();
+  if (share && viewerIsOwner && sharedDb) publishGames();
+}
+async function publishGames(){ try { const s = await gz(JSON.stringify(GAMES)); if (s) await sharedDb.doc('public/games').set({gz: true, s, n: GAMES.length, updatedAt: new Date().toISOString()}); } catch(e){} }
+async function loadGames(){ if (!sharedDb) return; try { const snap = await sharedDb.doc('public/games').get(); if (!snap.exists) return; const m = snap.data(); setGames(JSON.parse(m.gz ? await ungz(m.s) : m.s), false); } catch(e){} }
+const gnum = v => v === '' || v == null || !isFinite(+v) ? null : +v;
+function gameFor(team, date){ return GAMES.find(g => g.game_date === date && (teamAbbr(g.home_team) === team || teamAbbr(g.away_team) === team)); }
+const SIG = {'AGREE':['Both models','agree'], 'FF only':['Four Factors only','one'], 'APP only':['Scoring model only','one'], 'SPLIT':['Models disagree','split'], 'NO PLAY':['No play','none']};
+function playTxt(v, g){ if (!v || v === 'NO PLAY') return '\u2014'; if (v === 'OVER' || v === 'UNDER') return v === 'OVER' ? 'Over' : 'Under'; return teamAbbr(v); }
+function resBadge(r){ return r === 'W' ? '<span class="gres w">W</span>' : r === 'L' ? '<span class="gres l">L</span>' : r === 'P' ? '<span class="gres p">P</span>' : ''; }
+function renderGames(){
+  const box = $('#gameCards'); if (!box) return;
+  if (!GAMES.length) { $('#gamesSub').textContent = 'Import your game model\u2019s games_log.csv in the Data panel (or upload it with the script) to see spread, total and moneyline picks here.'; box.innerHTML = ''; $('#gameRecord').innerHTML = ''; return; }
+  const dates = [...new Set(GAMES.map(g => g.game_date))].sort();
+  const want = activeDay() || ymd(new Date());
+  const day = dates.includes(want) ? want : dates.filter(d => d <= want).pop() || dates[dates.length-1];
+  const list = GAMES.filter(g => g.game_date === day);
+  $('#gamesSub').textContent = `${day === want ? '' : 'Latest available: '}${dayLabel(day)}, ${list.length} game${list.length===1?'':'s'}. Green = both models agree, yellow = one model, orange = they disagree.`;
+  box.innerHTML = list.map(g => {
+    const A = teamAbbr(g.away_team), H = teamAbbr(g.home_team);
+    const vs = gnum(g.vegas_spread_home), vt = gnum(g.vegas_total);
+    const fav = (a, h) => a == null || h == null ? '\u2014' : (h >= a ? `${H} by ${(h-a).toFixed(1)}` : `${A} by ${(a-h).toFixed(1)}`);
+    const ffS = fav(gnum(g.projected_away_score), gnum(g.projected_home_score)), apS = fav(gnum(g.app_away_score), gnum(g.app_home_score));
+    const vS = vs == null ? '\u2014' : vs === 0 ? 'Pick\u2019em' : vs < 0 ? `${H} ${vs}` : `${A} ${(-vs)}`;
+    const r1 = v => v == null ? null : Math.round(v*10)/10, ffT = r1(gnum(g.projected_total)), apT = r1(gnum(g.app_total));
+    const far = (ffT != null && vt != null && Math.abs(ffT - vt) >= 15) || (gnum(g.projected_spread) != null && vs != null && Math.abs(gnum(g.projected_spread) + vs) >= 10);
+    const done = g.actual_home_score !== '' && g.actual_home_score != null;
+    const mk = (label, sig, ff, ap, rf, ra, extra) => { const s2 = SIG[sig] || [sig || '\u2014', 'none']; const pick = sig === 'AGREE' || sig === 'FF only' ? ff : sig === 'APP only' ? ap : null;
+      return `<div class="gmk ${s2[1]}"><div class="gmk-h"><span>${label}</span><span class="gsig ${s2[1]}">${esc(s2[0])}</span></div>
+        <div class="gmk-p">${pick && pick !== 'NO PLAY' ? `<b>${esc(playTxt(pick, g))}</b>` : sig === 'SPLIT' ? `<b>FF ${esc(playTxt(ff, g))} / Scoring ${esc(playTxt(ap, g))}</b>` : '<span class="meta">No play</span>'} ${done ? resBadge(sig === 'APP only' ? ra : rf) : ''}</div>
+        <div class="meta gmk-d">${extra}</div></div>`; };
+    const ml = g.moneyline_signal === 'AGREE' ? teamAbbr(g.moneyline_play) : null;
+    return `<div class="gcard ${g.spread_signal === 'AGREE' || g.total_signal === 'AGREE' ? 'agree' : (g.spread_signal === 'SPLIT' || g.total_signal === 'SPLIT') ? 'split' : (g.spread_signal || '').includes('only') || (g.total_signal || '').includes('only') ? 'one' : ''}">
+      <div class="gc-hd"><b>${esc(A)} @ ${esc(H)}</b>${far ? ' <span title="A model is far from Vegas">\u26A0\uFE0F</span>' : ''}${done ? `<span class="gfinal">Final ${esc(g.actual_away_score)}\u2013${esc(g.actual_home_score)}</span>` : ''}</div>
+      <div class="meta" style="font-size:12.5px">Vegas: ${esc(vS)}, O/U ${vt ?? '\u2014'}</div>
+      ${mk('Spread', g.spread_signal, g.spread_play, g.app_spread_play, g.spread_result, g.app_spread_result, `Four Factors ${esc(ffS)}, Scoring ${esc(apS)}`)}
+      ${mk('Total', g.total_signal, g.total_play, g.app_total_play, g.total_result, g.app_total_result, `Four Factors ${ffT ?? '\u2014'}, Scoring ${apT ?? '\u2014'}`)}
+      <div class="meta gml">Projected winner: ${ml ? `<b>${esc(ml)}</b> (both models)` : g.moneyline_signal === 'SPLIT' ? 'models split' : '\u2014'}${done && ml ? ' ' + resBadge(g.moneyline_result) : ''}</div>
+    </div>`; }).join('');
+  // running record
+  const tally = (pred) => { const o = {W:0, L:0, P:0}; GAMES.forEach(g => { const r = pred(g); if (o[r] != null) o[r]++; }); return o; };
+  const rec = o => { const n = o.W + o.L; return `${o.W}\u2013${o.L}${o.P ? `\u2013${o.P}` : ''}${n ? ` <span class="${o.W/n >= .524 ? 'pos' : 'neg'}">${(o.W/n*100).toFixed(1)}%</span>` : ''}`; };
+  const rows = [
+    ['Both models agree', tally(g => g.spread_signal === 'AGREE' ? g.spread_result : null), tally(g => g.total_signal === 'AGREE' ? g.total_result : null)],
+    ['Four Factors', tally(g => g.spread_play && g.spread_play !== 'NO PLAY' ? g.spread_result : null), tally(g => g.total_play && g.total_play !== 'NO PLAY' ? g.total_result : null)],
+    ['Scoring model', tally(g => g.app_spread_play && g.app_spread_play !== 'NO PLAY' ? g.app_spread_result : null), tally(g => g.app_total_play && g.app_total_play !== 'NO PLAY' ? g.app_total_result : null)],
+    ['Only one model', tally(g => g.spread_signal === 'FF only' ? g.spread_result : g.spread_signal === 'APP only' ? g.app_spread_result : null), tally(g => g.total_signal === 'FF only' ? g.total_result : g.total_signal === 'APP only' ? g.app_total_result : null)]
+  ];
+  $('#gameRecord').innerHTML = `<div class="grec"><div class="pc-h">Game model record (all graded games)</div><table class="res"><thead><tr><th></th><th>Spread</th><th>Total</th></tr></thead><tbody>${rows.map(r => `<tr><td><b>${r[0]}</b></td><td>${rec(r[1])}</td><td>${rec(r[2])}</td></tr>`).join('')}</tbody></table><div class="meta" style="font-size:12px;margin-top:6px">52.4% is break-even at -110. Treat records under about 300 bets as early.</div></div>`;
+}
 function renderH2H(){
   h2hRows = [];
   $$('#defWin button').forEach(b => b.setAttribute('aria-pressed', String(S.defWin || 30) === b.dataset.dwin));
@@ -2905,6 +2987,7 @@ function renderH2H(){
   if (!list.length || !Object.keys(DEF).length) { $('#h2h').innerHTML = ''; return; }
   if (!todayProps.length) computeToday();
   const hi = NBA ? 234 : 48, lo = NBA ? 220 : 41;
+  const gm = g => { const x = gameFor(g.home, g.next.date); if (!x) return ''; const a = gnum(x.projected_total) == null ? null : Math.round(gnum(x.projected_total)*10)/10, b = gnum(x.app_total) == null ? null : Math.round(gnum(x.app_total)*10)/10; return `<span class="envtag">Game model: total ${a ?? '\u2014'} / ${b ?? '\u2014'}${x.total_signal && x.total_signal !== 'NO PLAY' ? `, ${esc((SIG[x.total_signal]||[x.total_signal])[0])}: ${esc(playTxt(x.total_signal === 'APP only' ? x.app_total_play : x.total_play))}` : ''}</span>`; };
   const env = t => t == null ? '' : `<span class="envtag ${t>=hi?'fast':t<=lo?'slow':''}">O/U ${t}${t>=hi?', high-scoring':t<=lo?', low-scoring':''}</span>`;
   const alerts = team => missingDefenders(team).map(m => { const d = m.w ? Object.entries(m.w.delta).filter(([k]) => DSTATS.includes(k) && !['TOV','INT'].includes(k)).sort((a,b) => b[1]-a[1])[0] : null;
     return `<div class="h2h-alert">\u26A0 <b>${esc(team)}</b> without <a href="#" class="plink" data-pcard="${esc(m.p.id)}">${esc(m.p.name)}</a>${d && d[1] > .02 ? `: opponents get ${d[0]} <b>+${(d[1]*100).toFixed(0)}%</b> when he sits (${m.w.n} games)` : ', a key defender'}</div>`; }).join('');
@@ -2918,7 +3001,7 @@ function renderH2H(){
   };
   $('#h2h').innerHTML = list.map(g => `<div class="h2h">
     <div class="h2h-hd"><span><b>${esc(g.away)}</b> @ <b>${esc(g.home)}</b></span><span class="meta">${esc(gameWhen(g.next))}</span></div>
-    ${env(g.next.total)}
+    ${env(g.next.total)} ${gm(g)}
     ${alerts(g.home)}${alerts(g.away)}
     <table class="h2h-t"><thead><tr><th>Stat</th><th>${esc(g.away)} players<small>playing vs ${esc(g.home)}</small></th><th>${esc(g.home)} players<small>playing vs ${esc(g.away)}</small></th></tr></thead><tbody>
     ${DSTATS.map(k => `<tr><td>${esc(k)}</td><td>${dtag(dv(g.home, k), g.away)}</td><td>${dtag(dv(g.away, k), g.home)}</td></tr>`).join('')}</tbody></table>
@@ -3048,6 +3131,7 @@ $('#fab').addEventListener('click', () => setTab('parlay'));
 $('#dataBtn').addEventListener('click', () => { renderRunReport(); const d=$('#drawer'); d.hidden=!d.hidden; $('#dataBtn').setAttribute('aria-expanded', !d.hidden); });
 $('#playerIn').addEventListener('change', e => { const v = e.target.value.trim().toLowerCase(); const p = S.players.find(x=>x.name.toLowerCase()===v) || S.players.find(x=>x.name.toLowerCase().includes(v)); if (p) selectPlayer(p.id); });
 ['#stratSel','#stratSel2','#fStrat'].forEach(id => $(id).addEventListener('change', e => { S.strat = e.target.value; lsSet(LSP+'strat', S.strat); renderAll(); toast(S.strat === 'all' ? 'Showing all props' : `Only props that fit “${stratOn().n}”`); }));
+$('#gamesFile').addEventListener('change', async e => { const f = e.target.files[0]; if (!f) return; try { const rows = parseCsv(await f.text()); if (!rows.length || !('home_team' in rows[0])) throw new Error('bad'); setGames(rows, true); toast(`Loaded ${rows.length} games from your game model${viewerIsOwner ? ', shared with your link' : ''}`); } catch(err){ toast('That file doesn\u2019t look like games_log.csv'); } e.target.value = ''; });
 $('#stale').addEventListener('click', e => { const b = e.target.closest('[data-sadd]'); if (!b) return; toggleX(staleRows[+b.dataset.sadd]); renderStale(); renderSlipBadges(); });
 $('#gameChips').addEventListener('click', e => { const b = e.target.closest('[data-rg]'); if (!b) return; S.rgame = b.dataset.rg; renderRoster(); });
 $('#teamSel').addEventListener('change', e => { if (e.target.value) { S.rgame = e.target.value; renderRoster(); } });
@@ -3422,7 +3506,8 @@ $('#shareChk').addEventListener('change', async e => {
     viewerIsOwner = user ? !!(await user.isOwner()) : false;
     cloudReadyResolve();
     renderBadge();
-    setTimeout(() => { if (S.data && S.source !== 'sample') labSync(); }, 800);   // load the Strategy lab as soon as the account is connected
+    setTimeout(() => { if (S.data && S.source !== 'sample') labSync(); }, 800);
+    loadGames();   // load the Strategy lab as soon as the account is connected
     followShared(db);
     if (!user) return;
     const uid = await user.id(); if (!uid) return;
