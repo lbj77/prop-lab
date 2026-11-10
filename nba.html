@@ -500,6 +500,8 @@ button.gc{border:0;cursor:pointer;font:inherit}
 .gsig{font-size:11.5px;padding:1px 8px;border-radius:999px;background:var(--panel)}
 .gsig.agree{color:var(--over);background:var(--over-soft)} .gsig.one{color:var(--warn)} .gsig.split{color:#ff8a3d}
 .gml{margin-top:8px;font-size:12.5px}
+.gai{display:inline-block;font-size:11.5px;font-weight:800;padding:1px 7px;border-radius:999px;background:var(--panel);color:var(--muted);margin-left:4px}
+.gai.good{background:var(--over-soft);color:var(--over)} .gai.bad{background:var(--under-soft);color:var(--under)}
 .gres{display:inline-block;min-width:20px;text-align:center;font-weight:800;border-radius:6px;padding:0 5px;font-size:12px;margin-left:6px}
 .gres.w{background:var(--over);color:#002417} .gres.l{background:var(--under);color:#2a0006} .gres.p{background:var(--panel);color:var(--muted)}
 .grec{margin:4px 0 14px;padding:10px 12px;border-radius:12px;background:var(--panel2)}
@@ -695,7 +697,7 @@ details.inj{margin-top:22px!important}
 <body>
 <header class="top">
   <div class="top-inner">
-    <div class="brand"><h1>Prop<span>Lab</span><small class="lg">NBA</small></h1><nav class="league" aria-label="League"><span class="on">NBA</span><a href="nfl.html">NFL</a></nav></div>
+    <div class="brand"><h1>Prop<span>Lab</span><small class="lg">NBA</small></h1><nav class="league" aria-label="League"><span class="on">NBA</span><a href="nfl.html">NFL</a><a href="ufc.html">UFC</a></nav></div>
     <div class="actions">
       <select class="ghost" id="bookSel" aria-label="Which app you’re betting on" hidden></select>
       <button class="btn" id="refreshBtn" title="Load the latest shared picks">↻ Refresh</button>
@@ -951,9 +953,10 @@ details.inj{margin-top:22px!important}
       <h2>Game picks</h2>
       <p class="sub" id="gamesSub">Spread, total and moneyline from your NBA game model: Four Factors and the Scoring model, side by side.</p>
       <div class="ctrl-row gnav"><button class="ghost" id="gPrev" aria-label="Previous day">‹</button><b id="gDay"></b><button class="ghost" id="gNext" aria-label="Next day">›</button>
-        <div class="seg" id="gFilter"><button data-gf="all">All games</button><button data-gf="plays">Plays only</button><button data-gf="agree">Both agree</button></div></div>
+        <div class="seg" id="gFilter"><button data-gf="all">All games</button><button data-gf="plays">Plays only</button><button data-gf="agree">Both agree</button><button data-gf="ai">AI likes</button></div></div>
       <div class="gcards" id="gameCards"></div>
     </div>
+    <div class="panel" style="margin-top:14px"><div id="gameAI"></div></div>
     <div class="panel" style="margin-top:14px"><div id="gameRecord"></div></div>
   </section>
   <section class="view" id="view-parlay" hidden>
@@ -2942,7 +2945,65 @@ function gameFor(team, date){ return GAMES.find(g => g.game_date === date && (te
 const SIG = {'AGREE':['Both models','agree'], 'FF only':['Four Factors only','one'], 'APP only':['Scoring model only','one'], 'SPLIT':['Models disagree','split'], 'NO PLAY':['No play','none']};
 function playTxt(v, g){ if (!v || v === 'NO PLAY') return '\u2014'; if (v === 'OVER' || v === 'UNDER') return v === 'OVER' ? 'Over' : 'Under'; return teamAbbr(v); }
 function resBadge(r){ return r === 'W' ? '<span class="gres w">W</span>' : r === 'L' ? '<span class="gres l">L</span>' : r === 'P' ? '<span class="gres p">P</span>' : ''; }
+/* ---------- Game AI: learns which game-model plays actually win ---------- */
+const GAI_MIN = 60;
+const GAI_FEAT = {
+  spread: ['Four Factors made the pick (vs Scoring)', 'Both models agree', 'Models disagree', 'Edge vs Vegas (per 5 pts)', 'Home team', 'Favorite'],
+  total:  ['Four Factors made the pick (vs Scoring)', 'Both models agree', 'Models disagree', 'Edge vs Vegas (per 5 pts)', 'Over (vs under)']
+};
+let GAI = {spread: null, total: null};
+// every play in a game, with the facts the AI learns from
+function gameBets(g){
+  const out = [], vs = gnum(g.vegas_spread_home), vt = gnum(g.vegas_total), H = g.home_team;
+  const sp = (play, proj) => { const home = play === H, e = (proj + vs) * (home ? 1 : -1); return {e, home, fav: home ? vs < 0 : vs > 0}; };
+  if (vs != null) {
+    const ff = g.spread_play && g.spread_play !== 'NO PLAY' && gnum(g.projected_spread) != null ? {play: g.spread_play, ...sp(g.spread_play, gnum(g.projected_spread)), res: g.spread_result} : null;
+    const ap = g.app_spread_play && g.app_spread_play !== 'NO PLAY' && gnum(g.app_spread) != null ? {play: g.app_spread_play, ...sp(g.app_spread_play, gnum(g.app_spread)), res: g.app_spread_result} : null;
+    const row = (b, ffw, ag, spl) => ({mkt: 'spread', play: b.play, res: b.res, x: [1, ffw, ag, spl, Math.min(15, Math.abs(b.e))/5, b.home ? 1 : 0, b.fav ? 1 : 0]});
+    if (ff && ap && ff.play === ap.play) out.push(row({...ff, e: (ff.e + ap.e)/2}, .5, 1, 0));
+    else { if (ff) out.push(row(ff, 1, 0, ap ? 1 : 0)); if (ap) out.push(row(ap, 0, 0, ff ? 1 : 0)); }
+  }
+  if (vt != null) {
+    const tt = (play, proj, res) => play && play !== 'NO PLAY' && proj != null ? {play, over: play === 'OVER', e: (proj - vt) * (play === 'OVER' ? 1 : -1), res} : null;
+    const ff = tt(g.total_play, gnum(g.projected_total), g.total_result), ap = tt(g.app_total_play, gnum(g.app_total), g.app_total_result);
+    const row = (b, ffw, ag, spl) => ({mkt: 'total', play: b.play, res: b.res, x: [1, ffw, ag, spl, Math.min(15, Math.abs(b.e))/5, b.over ? 1 : 0]});
+    if (ff && ap && ff.play === ap.play) out.push(row({...ff, e: (ff.e + ap.e)/2}, .5, 1, 0));
+    else { if (ff) out.push(row(ff, 1, 0, ap ? 1 : 0)); if (ap) out.push(row(ap, 0, 0, ff ? 1 : 0)); }
+  }
+  return out;
+}
+function trainGAI(){
+  for (const mkt of ['spread', 'total']) {
+    const pts = []; GAMES.forEach(g => gameBets(g).forEach(b => { if (b.mkt === mkt && (b.res === 'W' || b.res === 'L')) pts.push([b.x, b.res === 'W' ? 1 : 0, g.game_date]); }));
+    if (pts.length < GAI_MIN) { GAI[mkt] = {n: pts.length, w: null}; continue; }
+    const fit = rows => { const d = rows[0][0].length, w = new Array(d).fill(0);
+      for (let it = 0; it < 600; it++) { const gr = new Array(d).fill(0); for (const [x, y] of rows) { let z = 0; for (let i = 0; i < d; i++) z += x[i]*w[i]; const e = sig(z) - y; for (let i = 0; i < d; i++) gr[i] += e*x[i]; }
+        for (let i = 0; i < d; i++) w[i] -= .4*(gr[i]/rows.length + (i ? .06*w[i] : 0)); }   // strong pull toward "no effect" on small samples
+      return w; };
+    const w = fit(pts);
+    // honest check: train on older games, test on the newest quarter
+    const sorted = [...pts].sort((a,b) => a[2] < b[2] ? -1 : 1), cut = Math.floor(sorted.length*.75), w2 = fit(sorted.slice(0, cut)), test = sorted.slice(cut);
+    let tw = 0, tl = 0; test.forEach(([x, y]) => { let z = 0; x.forEach((v,i) => z += v*w2[i]); if (sig(z) >= .55) y ? tw++ : tl++; });
+    let aw = 0, al = 0; test.forEach(([, y]) => y ? aw++ : al++);
+    GAI[mkt] = {n: pts.length, w, test: {aiW: tw, aiL: tl, allW: aw, allL: al}};
+  }
+}
+function gaiChance(b){ const m = GAI[b.mkt]; if (!m || !m.w) return null; let z = 0; b.x.forEach((v,i) => z += v*m.w[i]); return sig(z); }
+function renderGameAI(){
+  const el = $('#gameAI'); if (!el) return;
+  const part = mkt => { const m = GAI[mkt]; const title = mkt === 'spread' ? 'Spread' : 'Total';
+    if (!m || !m.w) return `<div class="lw"><span>${title}</span><b class="meta">learning starts at ${GAI_MIN} graded plays (${m ? m.n : 0} so far)</b></div>`;
+    const base = .52, eff = i => (sig(lgt(base) + m.w[i]) - base)*100;
+    const rows = GAI_FEAT[mkt].map((nm, j) => ({nm, v: eff(j+1)})).sort((a,b) => b.v - a.v);
+    const t = m.test, tn = t.aiW + t.aiL, an = t.allW + t.allL;
+    return `<div class="pc-h" style="margin-top:12px">${title}: what the AI learned from ${m.n} graded plays</div>
+      <div class="lweights">${rows.map(x => `<div class="lw"><span>${esc(x.nm)}</span><b class="${x.v >= 1 ? 'pos' : x.v <= -1 ? 'neg' : ''}">${x.v>=0?'+':''}${x.v.toFixed(1)} pts</b></div>`).join('')}</div>
+      <div class="meta" style="font-size:12.5px;margin-top:6px">Test on the newest ${an} plays it hadn\u2019t seen: plays it rated 55%+ went <b>${t.aiW}\u2013${t.aiL}</b>${tn ? ` (${Math.round(t.aiW/tn*100)}%)` : ''}, vs all plays ${t.allW}\u2013${t.allL}${an ? ` (${Math.round(t.allW/an*100)}%)` : ''}.</div>`; };
+  el.innerHTML = `<h2 style="margin:0">Game AI</h2><p class="sub" style="margin-bottom:0">Learns from every graded game which plays actually win: how big the edge is, whether the models agree, home or away, favorite or underdog, over or under. It retrains every time new results come in, and puts its win chance on each pick. Change shown is from a 52% play; small samples, so expect it to sharpen over the season.</p>${part('spread')}${part('total')}`;
+}
 function renderGames(){
+  try { trainGAI(); } catch(e){}
+  setTimeout(renderGameAI, 0);
   const box = $('#gameCards'); if (!box) return;
   if (!GAMES.length) { $('#gamesSub').textContent = 'Import your game model\u2019s games_log.csv in the Data panel (or upload it with the script) to see spread, total and moneyline picks here.'; box.innerHTML = ''; $('#gameRecord').innerHTML = ''; return; }
   const dates = [...new Set(GAMES.map(g => g.game_date))].sort();
@@ -2952,7 +3013,9 @@ function renderGames(){
   $('#gDay').textContent = dayLabel(day); $('#gPrev').disabled = di <= 0; $('#gNext').disabled = di >= dates.length - 1;
   $$('#gFilter button').forEach(b => b.setAttribute('aria-pressed', b.dataset.gf === gf));
   const hasPlay = g => (g.spread_signal && g.spread_signal !== 'NO PLAY') || (g.total_signal && g.total_signal !== 'NO PLAY');
-  const list = GAMES.filter(g => g.game_date === day && (gf === 'all' || (gf === 'plays' ? hasPlay(g) : (g.spread_signal === 'AGREE' || g.total_signal === 'AGREE'))));
+  const aiBest = g => Math.max(0, ...gameBets(g).map(b => gaiChance(b) || 0));
+  const list = GAMES.filter(g => g.game_date === day && (gf === 'all' || (gf === 'plays' ? hasPlay(g) : gf === 'ai' ? aiBest(g) >= .55 : (g.spread_signal === 'AGREE' || g.total_signal === 'AGREE'))));
+  if (gf === 'ai') list.sort((a,b) => aiBest(b) - aiBest(a));
   $('#gamesSub').textContent = `${list.length} game${list.length===1?'':'s'}${day === want ? ' today' : ''}. Green edge = both models agree, yellow = one model, orange = they disagree. Your model posts new picks around 8 AM; they show here after the 11 AM upload.`;
   box.innerHTML = list.map(g => {
     const A = teamAbbr(g.away_team), H = teamAbbr(g.home_team);
@@ -2963,9 +3026,10 @@ function renderGames(){
     const r1 = v => v == null ? null : Math.round(v*10)/10, ffT = r1(gnum(g.projected_total)), apT = r1(gnum(g.app_total));
     const far = (ffT != null && vt != null && Math.abs(ffT - vt) >= 15) || (gnum(g.projected_spread) != null && vs != null && Math.abs(gnum(g.projected_spread) + vs) >= 10);
     const done = g.actual_home_score !== '' && g.actual_home_score != null;
-    const mk = (label, sig, ff, ap, rf, ra, extra) => { const s2 = SIG[sig] || [sig || '\u2014', 'none']; const pick = sig === 'AGREE' || sig === 'FF only' ? ff : sig === 'APP only' ? ap : null;
+    const bets = gameBets(g), aiOf = (mkt, play) => { const b = bets.find(x => x.mkt === mkt && x.play === play); const c = b ? gaiChance(b) : null; return c == null ? '' : `<span class="gai ${c >= .55 ? 'good' : c < .5 ? 'bad' : ''}" title="Game AI win chance">AI ${Math.round(c*100)}%</span>`; };
+    const mk = (label, sig, ff, ap, rf, ra, extra) => { const s2 = SIG[sig] || [sig || '\u2014', 'none']; const pick = sig === 'AGREE' || sig === 'FF only' ? ff : sig === 'APP only' ? ap : null; const mkt = label === 'Spread' ? 'spread' : 'total';
       return `<div class="gmk ${s2[1]}"><div class="gmk-h"><span>${label}</span><span class="gsig ${s2[1]}">${esc(s2[0])}</span></div>
-        <div class="gmk-p">${pick && pick !== 'NO PLAY' ? `<b>${esc(playTxt(pick, g))}</b>` : sig === 'SPLIT' ? `<b>FF ${esc(playTxt(ff, g))} / Scoring ${esc(playTxt(ap, g))}</b>` : '<span class="meta">No play</span>'} ${done ? resBadge(sig === 'APP only' ? ra : rf) : ''}</div>
+        <div class="gmk-p">${pick && pick !== 'NO PLAY' ? `<b>${esc(playTxt(pick, g))}</b> ${aiOf(mkt, pick)}` : sig === 'SPLIT' ? `<b>FF ${esc(playTxt(ff, g))}</b> ${aiOf(mkt, ff)} <b>/ Scoring ${esc(playTxt(ap, g))}</b> ${aiOf(mkt, ap)}` : '<span class="meta">No play</span>'} ${done ? resBadge(sig === 'APP only' ? ra : rf) : ''}</div>
         <div class="meta gmk-d">${extra}</div></div>`; };
     const ml = g.moneyline_signal === 'AGREE' ? teamAbbr(g.moneyline_play) : null;
     return `<div class="gcard ${g.spread_signal === 'AGREE' || g.total_signal === 'AGREE' ? 'agree' : (g.spread_signal === 'SPLIT' || g.total_signal === 'SPLIT') ? 'split' : (g.spread_signal || '').includes('only') || (g.total_signal || '').includes('only') ? 'one' : ''}">

@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Prop Lab UFC</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#05070A">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Barlow:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{color-scheme:dark;--bg:#05070A;--panel:#0E1116;--panel2:#141820;--line:#232a35;--ink:#F3F6FA;--muted:#9AA6B8;--ball:#3DDCFF;--over:#2EE59D;--under:#FF5C7A;--warn:#FFC24B;--over-soft:rgba(46,229,157,.14);--under-soft:rgba(255,92,122,.14);--cond:'Barlow Condensed',system-ui,sans-serif;--body:'Barlow',system-ui,sans-serif}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--body)}
+:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+header{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:rgba(5,7,10,.92);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:rgba(5,7,10,.92)}
+.hd{max-width:1100px;margin:0 auto;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;gap:10px}
+h1{font-family:var(--cond);font-size:30px;margin:0}
+h1 span{color:var(--ball)}
+nav.league{display:flex;background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:3px}
+nav.league a,nav.league span{font-family:var(--cond);font-weight:800;font-size:16px;padding:6px 14px;border-radius:999px;color:var(--muted);text-decoration:none}
+nav.league span.on{background:var(--ball);color:#001A22}
+main{max-width:1100px;margin:0 auto;padding:14px 16px 40px}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:16px;margin-bottom:14px}
+h2{font-family:var(--cond);font-size:26px;margin:0 0 4px}
+.sub,.meta{color:var(--muted)}
+.sub{margin:0 0 12px;font-size:14.5px;line-height:1.45}
+.meta{font-size:13px}
+.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+@media (max-width:620px){.stats{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.stat{background:var(--panel2);border-radius:12px;padding:10px 12px}
+.stat .l{font-size:12.5px;color:var(--muted);font-weight:600}
+.stat .v{font-family:var(--cond);font-size:26px;font-weight:800}
+.pos{color:var(--over)} .neg{color:var(--under)}
+.ev{margin-top:14px}
+.ev-h{display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap;font-family:var(--cond);font-size:21px;margin-bottom:8px}
+.pk{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px 12px;align-items:center;padding:10px 12px;border-radius:12px;background:var(--panel2);border-left:4px solid var(--line);margin-bottom:8px}
+.pk.MUST{border-left-color:var(--over)} .pk.STRONG{border-left-color:var(--ball)} .pk.DISC{border-left-color:var(--warn)} .pk.REVIEW{border-left-color:#7b8494}
+.pk .who{font-weight:700;font-size:16px}
+.pk .who small{font-weight:500;color:var(--muted)}
+.pk .odds{font-family:var(--cond);font-size:22px;font-weight:800;text-align:right}
+.pk .row2{grid-column:1 / -1;display:flex;flex-wrap:wrap;gap:6px 12px;font-size:13px;color:var(--muted)}
+.tier{display:inline-block;font-size:11.5px;font-weight:800;padding:2px 8px;border-radius:999px;background:var(--panel);margin-right:6px;vertical-align:2px}
+.tier.MUST{color:#002417;background:var(--over)} .tier.STRONG{color:#001A22;background:var(--ball)} .tier.DISC{color:#2a1a00;background:var(--warn)} .tier.REVIEW{color:var(--ink);background:#3a4150}
+.res{display:inline-block;font-weight:800;border-radius:6px;padding:0 6px;font-size:12.5px;margin-left:6px}
+.res.win{background:var(--over);color:#002417} .res.loss{background:var(--under);color:#2a0006} .res.push{background:var(--panel);color:var(--muted)}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th{text-align:left;color:var(--muted);font-weight:600;font-size:12.5px;padding:6px 8px;border-bottom:1px solid var(--line)}
+td{padding:8px;border-bottom:1px solid var(--line)}
+td.r,th.r{text-align:right}
+@media (max-width:620px){table{font-size:13px} th,td{padding:6px 5px}}
+.seg{display:inline-flex;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:3px;margin:4px 0 8px}
+.seg button{font:inherit;font-weight:700;font-size:14px;border:0;background:none;color:var(--muted);padding:6px 12px;border-radius:8px;cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--ball);color:#001A22}
+.empty{color:var(--muted);padding:12px 0}
+#gate{position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;padding:24px;background:#05070A}
+#gate[hidden]{display:none}
+#gate .gbox{max-width:380px;width:100%;text-align:center;background:#0E1116;border:1px solid #232a35;border-radius:18px;padding:28px 22px}
+#gate h1{font-size:40px;margin:0 0 10px}
+#gate p{color:#9AA6B8;font-size:15px;line-height:1.5;margin:0 0 18px}
+#gate button{font:inherit;font-weight:700;font-size:16px;padding:12px 18px;border-radius:12px;border:0;background:#3DDCFF;color:#001A22;cursor:pointer;width:100%}
+</style>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="config.js"></script>
+</head>
+<body>
+<header><div class="hd"><h1>Prop<span>Lab</span></h1><nav class="league" aria-label="Sport"><a href="nba.html">NBA</a><a href="nfl.html">NFL</a><span class="on">UFC</span></nav></div></header>
+<main>
+  <div class="panel">
+    <h2>UFC picks</h2>
+    <p class="sub" id="sub">Moneyline picks from your UFC model, with its tier, the model's chance vs the market's, and the edge.</p>
+    <div id="upcoming"></div>
+  </div>
+  <div class="panel">
+    <h2>Track record</h2>
+    <p class="sub">Every graded pick. The headline record leaves out <b>Review</b> picks (flagged, not recommended), same as your Discord summary. Units are 1 unit per pick.</p>
+    <div class="stats" id="stats"></div>
+    <div style="margin-top:12px;overflow-x:auto"><table id="tiers"></table></div>
+  </div>
+  <div class="panel">
+    <h2>Past cards</h2>
+    <div class="seg" id="tierFilter"><button data-t="all" aria-pressed="true">All picks</button><button data-t="bet">Recommended</button><button data-t="review">Review only</button></div>
+    <div id="past"></div>
+  </div>
+</main>
+<script>
+'use strict';
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const TIERS = [['MUST BET','MUST','Must bet'], ['STRONG','STRONG','Strong'], ['DISCRETIONARY','DISC','Discretionary'], ['\u26a0\ufe0f REVIEW','REVIEW','Review']];
+const tierInfo = t => TIERS.find(x => x[0] === t) || [t, 'REVIEW', String(t || '').replace(/[^\w ]/g, '').trim() || 'Other'];
+const am = n => n == null || !isFinite(+n) ? '\u2014' : (+n > 0 ? '+' : '') + Math.round(+n);
+const pct = v => v == null || !isFinite(+v) ? '\u2014' : Math.round(+v * 100) + '%';
+const fmtDate = d => { const x = new Date(d + 'T12:00:00'); return isNaN(x) ? d : x.toLocaleDateString([], {weekday:'short', month:'short', day:'numeric'}); };
+let PICKS = [], tierView = 'all';
+function tally(list){
+  const w = list.filter(r => r.result === 'win').length, l = list.filter(r => r.result === 'loss').length, p = list.filter(r => r.result === 'draw' || r.result === 'nc').length;
+  const u = list.reduce((s, r) => s + (+r.units || 0), 0);
+  return {w, l, p, u, n: w + l, roi: list.length ? u / list.length : 0};
+}
+const rec = t => `${t.w}\u2013${t.l}${t.p ? `\u2013${t.p}` : ''}`;
+function render(){
+  const pending = PICKS.filter(r => r.status === 'pending'), graded = PICKS.filter(r => r.status === 'graded');
+  // upcoming card(s)
+  const byEv = {}; pending.forEach(r => (byEv[r.event_date + '|' + r.event_name] = byEv[r.event_date + '|' + r.event_name] || []).push(r));
+  const evs = Object.keys(byEv).sort();
+  $('#upcoming').innerHTML = evs.length ? evs.map(k => { const list = byEv[k].sort((a,b) => TIERS.findIndex(t => t[0] === a.tier) - TIERS.findIndex(t => t[0] === b.tier) || (b.edge||0) - (a.edge||0)); const [d, name] = k.split('|');
+    return `<div class="ev"><div class="ev-h"><span>${esc(name)}</span><span class="meta">${esc(fmtDate(d))}</span></div>${list.map(card).join('')}</div>`; }).join('')
+    : `<div class="empty">No upcoming picks yet. Your model posts a card's picks the day before or the day of the event, once odds are up.</div>`;
+  // record
+  const bet = tally(graded.filter(r => r.tier !== '\u26a0\ufe0f REVIEW'));
+  $('#stats').innerHTML = [
+    ['Record', rec(bet)],
+    ['Win rate', bet.n ? Math.round(bet.w / bet.n * 100) + '%' : '\u2014'],
+    ['Units', `<span class="${bet.u >= 0 ? 'pos' : 'neg'}">${bet.u >= 0 ? '+' : ''}${bet.u.toFixed(2)}</span>`],
+    ['Return per pick', `<span class="${bet.roi >= 0 ? 'pos' : 'neg'}">${bet.roi >= 0 ? '+' : ''}${(bet.roi * 100).toFixed(1)}%</span>`]
+  ].map(([l, v]) => `<div class="stat"><div class="l">${l}</div><div class="v">${v}</div></div>`).join('');
+  $('#tiers').innerHTML = `<thead><tr><th>Tier</th><th class="r">Record</th><th class="r">Win rate</th><th class="r">Units</th><th class="r">Return</th></tr></thead><tbody>${TIERS.map(([t, cls, label]) => { const x = tally(graded.filter(r => r.tier === t)); if (!x.n && !x.p) return '';
+    return `<tr><td><span class="tier ${cls}">${label}</span></td><td class="r">${rec(x)}</td><td class="r">${x.n ? Math.round(x.w / x.n * 100) + '%' : '\u2014'}</td><td class="r ${x.u >= 0 ? 'pos' : 'neg'}">${x.u >= 0 ? '+' : ''}${x.u.toFixed(2)}</td><td class="r ${x.roi >= 0 ? 'pos' : 'neg'}">${(x.roi * 100).toFixed(1)}%</td></tr>`; }).join('')}</tbody>`;
+  // past cards
+  const shown = graded.filter(r => tierView === 'all' || (tierView === 'review' ? r.tier === '\u26a0\ufe0f REVIEW' : r.tier !== '\u26a0\ufe0f REVIEW'));
+  const past = {}; shown.forEach(r => (past[r.event_date + '|' + r.event_name] = past[r.event_date + '|' + r.event_name] || []).push(r));
+  const pk = Object.keys(past).sort().reverse();
+  $('#past').innerHTML = pk.length ? pk.map(k => { const [d, name] = k.split('|'), t = tally(past[k]);
+    return `<div class="ev"><div class="ev-h"><span>${esc(name)}</span><span class="meta">${esc(fmtDate(d))}, ${rec(t)}, <span class="${t.u >= 0 ? 'pos' : 'neg'}">${t.u >= 0 ? '+' : ''}${t.u.toFixed(2)}u</span></span></div>${past[k].map(card).join('')}</div>`; }).join('')
+    : '<div class="empty">No graded picks yet.</div>';
+  $('#sub').textContent = `${pending.length ? `${pending.length} upcoming pick${pending.length === 1 ? '' : 's'}. ` : ''}Moneyline picks from your UFC model, with its tier, the model\u2019s chance vs the market\u2019s, and the edge.`;
+}
+function card(r){
+  const [, cls, label] = tierInfo(r.tier), res = r.status === 'graded' ? (r.result === 'win' ? 'win' : r.result === 'loss' ? 'loss' : 'push') : null;
+  const model = r.blended_prob != null ? r.blended_prob : r.model_prob;
+  return `<div class="pk ${cls}"><div class="who"><span class="tier ${cls}">${esc(label)}</span>${esc(r.fighter)} <small>vs ${esc(r.opponent)}</small>${res ? `<span class="res ${res}">${res === 'win' ? 'W' : res === 'loss' ? 'L' : (r.result || '').toUpperCase()}</span>` : ''}</div>
+    <div class="odds">${esc(am(r.moneyline))}</div>
+    <div class="row2"><span>Model ${pct(model)}</span><span>Market ${pct(r.market_fair_prob)}</span><span class="${(r.edge||0) >= 0 ? 'pos' : 'neg'}">Edge ${r.edge != null ? ((r.edge >= 0 ? '+' : '') + (r.edge * 100).toFixed(1) + '%') : '\u2014'}</span>${r.bookmaker ? `<span>${esc(r.bookmaker)}</span>` : ''}${res ? `<span class="${(+r.units||0) >= 0 ? 'pos' : 'neg'}">${(+r.units||0) >= 0 ? '+' : ''}${(+r.units||0).toFixed(2)}u</span>` : ''}</div></div>`;
+}
+document.querySelector('#tierFilter').addEventListener('click', e => { const b = e.target.closest('[data-t]'); if (!b) return; tierView = b.dataset.t; document.querySelectorAll('#tierFilter button').forEach(x => x.setAttribute('aria-pressed', x === b)); render(); });
+async function ungz(b64){ const bin = Uint8Array.from(atob(b64), c => c.charCodeAt(0)); const ds = new Blob([bin]).stream().pipeThrough(new DecompressionStream('gzip')); return await new Response(ds).text(); }
+(function(){
+  const C = window.PROPLAB_CONFIG || {}, gate = h => { let g = $('#gate'); if (!g) { g = document.createElement('div'); g.id = 'gate'; document.body.appendChild(g); } g.innerHTML = h; g.hidden = !h; };
+  try { const c = JSON.parse(localStorage.getItem('ufclab:picks') || 'null'); if (Array.isArray(c)) { PICKS = c; render(); } } catch(e){}
+  if (!window.firebase || !C.firebase) { gate('<div class="gbox"><h1>Prop<span style="color:#3DDCFF">Lab</span></h1><p>Couldn\u2019t load sign-in. Check your connection and reload.</p></div>'); return; }
+  firebase.initializeApp(C.firebase);
+  const auth = firebase.auth(), fs = firebase.firestore(), owner = String(C.ownerEmail || '').toLowerCase();
+  window.__signIn = () => { const pr = new firebase.auth.GoogleAuthProvider(); pr.setCustomParameters({prompt: 'select_account'}); auth.signInWithPopup(pr).catch(() => auth.signInWithRedirect(pr)); };
+  window.__signOut = () => auth.signOut().then(() => location.reload());
+  auth.onAuthStateChanged(async u => {
+    if (!u) { gate('<div class="gbox"><h1>Prop<span style="color:#3DDCFF">Lab</span></h1><p>Private app for invited friends. Sign in with the Google account you were invited with.</p><button onclick="__signIn()">Sign in with Google</button></div>'); return; }
+    const em = (u.email || '').toLowerCase(); let ok = em === owner;
+    if (!ok) { try { ok = (await fs.doc('allow/' + em).get()).exists; } catch(e){} }
+    if (!ok) { gate('<div class="gbox"><h1>Not invited yet</h1><p>' + esc(em) + ' isn\u2019t on the list. Ask the owner to add it.</p><button onclick="__signOut()">Use a different account</button></div>'); return; }
+    gate('');
+    const load = async () => { try { const s = await fs.doc('sports/ufc/public/picks').get(); if (!s.exists) { if (!PICKS.length) $('#upcoming').innerHTML = '<div class="empty">No UFC data yet. Run the UFC upload on your PC.</div>'; return; }
+      const m = s.data(); PICKS = JSON.parse(m.gz ? await ungz(m.s) : m.s); localStorage.setItem('ufclab:picks', JSON.stringify(PICKS)); render(); } catch(e){} };
+    load(); setInterval(load, 120000);
+  });
+})();
+</script>
+</body>
+</html>
