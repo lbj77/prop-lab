@@ -78,7 +78,14 @@ td.r,th.r{text-align:right}
     <h2>Track record</h2>
     <p class="sub">Every graded pick. The headline record leaves out <b>Review</b> picks (flagged, not recommended), same as your Discord summary. Units are 1 unit per pick.</p>
     <div class="stats" id="stats"></div>
+    <div id="limitCmp" class="meta" style="margin-top:10px"></div>
     <div style="margin-top:12px;overflow-x:auto"><table id="tiers"></table></div>
+  </div>
+  <div class="panel">
+    <h2>UFC AI</h2>
+    <p class="sub">Learns from every graded pick which kinds actually win, starting from the betting market’s own price: tier, edge size, how long the price is, and thin-data or downgraded picks. It retrains whenever new results come in and puts its win chance and value on each pick.</p>
+    <div id="ai"></div>
+    <div id="tune" class="meta" style="margin-top:12px"></div>
   </div>
   <div class="panel">
     <h2>Past cards</h2>
@@ -95,7 +102,52 @@ const tierInfo = t => TIERS.find(x => x[0] === t) || [t, 'REVIEW', String(t || '
 const am = n => n == null || !isFinite(+n) ? '\u2014' : (+n > 0 ? '+' : '') + Math.round(+n);
 const pct = v => v == null || !isFinite(+v) ? '\u2014' : Math.round(+v * 100) + '%';
 const fmtDate = d => { const x = new Date(d + 'T12:00:00'); return isNaN(x) ? d : x.toLocaleDateString([], {weekday:'short', month:'short', day:'numeric'}); };
-let PICKS = [], tierView = 'all';
+let PICKS = [], tierView = 'all', MODEL = null;
+/* ---------- UFC AI ---------- */
+const LIMIT = 300;                                     // longshot limit (same rule as the model)
+const dec = ml => +ml > 0 ? 1 + +ml/100 : 1 + 100/Math.abs(+ml);
+const sig = z => 1/(1+Math.exp(-z)), lgt = p => { const q = Math.max(.02, Math.min(.98, p)); return Math.log(q/(1-q)); };
+const isLong = r => (+r.moneyline || 0) >= LIMIT;
+const blocked = r => isLong(r) && r.tier !== 'STRONG';   // what the longshot limit would pass on
+const AI_FEAT = ['Market price (baseline)', 'Must bet tier', 'Strong tier', 'Review tier', 'Bigger edge (per 10 pts)', `Longshot (+${LIMIT} or longer)`, 'Thin data (a fighter with under 5 UFC fights)', 'Downgraded or capped'];
+function feat(r){
+  const mk = r.market_fair_prob != null ? +r.market_fair_prob : 1/dec(r.moneyline);
+  const minF = Math.min(+r.fighter_total_fights || 99, +r.opponent_total_fights || 99);
+  return [1, lgt(mk), r.tier === 'MUST BET' ? 1 : 0, r.tier === 'STRONG' ? 1 : 0, r.tier === '\u26a0\ufe0f REVIEW' ? 1 : 0,
+    Math.max(0, Math.min(4, (+r.edge || 0) * 10)), isLong(r) ? 1 : 0, minF < 5 ? 1 : 0, (r.was_confidence_downgraded || r.was_low_data_capped) ? 1 : 0];
+}
+// logistic regression pulled toward "the market is right" (weight 1 on the market price, 0 on everything else)
+function fitAI(rows){
+  const d = rows[0][0].length, prior = new Array(d).fill(0); prior[1] = 1; const w = prior.slice();
+  for (let it = 0; it < 800; it++) { const g = new Array(d).fill(0);
+    for (const [x, y] of rows) { let z = 0; for (let i = 0; i < d; i++) z += x[i]*w[i]; const e = sig(z) - y; for (let i = 0; i < d; i++) g[i] += e*x[i]; }
+    for (let i = 0; i < d; i++) w[i] -= .3*(g[i]/rows.length + (i ? .15*(w[i] - prior[i]) : 0)); }
+  return w;
+}
+let AI = null;
+function trainAI(){
+  const rows = PICKS.filter(r => r.status === 'graded' && (r.result === 'win' || r.result === 'loss')).sort((a,b) => a.event_date < b.event_date ? -1 : 1).map(r => [feat(r), r.result === 'win' ? 1 : 0, r]);
+  if (rows.length < 20) { AI = {n: rows.length}; return; }
+  const w = fitAI(rows), cut = Math.floor(rows.length * .7), w2 = fitAI(rows.slice(0, cut));
+  let vw = 0, vl = 0, vu = 0, aw = 0, al = 0, au = 0;
+  rows.slice(cut).forEach(([x, y, r]) => { let z = 0; x.forEach((v,i) => z += v*w2[i]); const val = sig(z)*dec(r.moneyline) - 1, u = +r.units || 0;
+    y ? aw++ : al++; au += u; if (val > 0) { y ? vw++ : vl++; vu += u; } });
+  AI = {n: rows.length, w, test: {vw, vl, vu, aw, al, au, n: rows.length - cut}};
+}
+const aiChance = r => { if (!AI || !AI.w) return null; let z = 0; feat(r).forEach((v,i) => z += v*AI.w[i]); return sig(z); };
+function renderAI(){
+  const el = $('#ai');
+  if (!AI || !AI.w) { el.innerHTML = `<div class="empty">The AI starts after 20 graded picks (${AI ? AI.n : 0} so far).</div>`; }
+  else {
+    const base = .35, rows = AI_FEAT.slice(1).map((nm, j) => ({nm, v: (sig(lgt(base) + AI.w[j+2]) - base)*100})).sort((a,b) => b.v - a.v), t = AI.test;
+    const mkt = AI.w[1];
+    el.innerHTML = `<div class="meta" style="margin-bottom:8px">Learned from ${AI.n} graded picks. Change in win chance when each thing is true, starting from a fighter the market gives 35%:</div>
+      <div style="display:grid;gap:4px;grid-template-columns:repeat(auto-fill,minmax(250px,1fr))">${rows.map(x => `<div class="stat" style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px"><span style="font-size:13.5px">${esc(x.nm)}</span><b class="${x.v >= 1 ? 'pos' : x.v <= -1 ? 'neg' : ''}">${x.v >= 0 ? '+' : ''}${x.v.toFixed(1)} pts</b></div>`).join('')}</div>
+      <div class="meta" style="margin-top:8px">It trusts the market price at ${Math.round(mkt*100)}% strength (100% = the market is right on its own).</div>
+      <div class="meta" style="margin-top:6px">Honest test on the newest ${t.n} picks it hadn\u2019t seen: picks it rated as value went <b>${t.vw}\u2013${t.vl} (${t.vu >= 0 ? '+' : ''}${t.vu.toFixed(2)}u)</b>, vs all of them ${t.aw}\u2013${t.al} (${t.au >= 0 ? '+' : ''}${t.au.toFixed(2)}u). Small sample: it sharpens with every card.</div>`;
+  }
+  $('#tune').innerHTML = MODEL ? `<b style="color:var(--ink)">Model tune-up:</b> settings last re-fit ${MODEL.tuned_at ? esc(String(MODEL.tuned_at).slice(0,10)) : '\u2014'}, checked ${MODEL.checked_at ? esc(String(MODEL.checked_at).slice(0,10)) : '\u2014'} on ${MODEL.test_fights || '\u2014'} past fights: picks ${MODEL.accuracy ? Math.round(MODEL.accuracy*1000)/10 + '%' : '\u2014'} of winners (betting markets are around 66%). Re-tunes itself every Monday.` : '';
+}
 function tally(list){
   const w = list.filter(r => r.result === 'win').length, l = list.filter(r => r.result === 'loss').length, p = list.filter(r => r.result === 'draw' || r.result === 'nc').length;
   const u = list.reduce((s, r) => s + (+r.units || 0), 0);
@@ -103,6 +155,8 @@ function tally(list){
 }
 const rec = t => `${t.w}\u2013${t.l}${t.p ? `\u2013${t.p}` : ''}`;
 function render(){
+  try { trainAI(); } catch(e){}
+  renderAI();
   const pending = PICKS.filter(r => r.status === 'pending'), graded = PICKS.filter(r => r.status === 'graded');
   // upcoming card(s)
   const byEv = {}; pending.forEach(r => (byEv[r.event_date + '|' + r.event_name] = byEv[r.event_date + '|' + r.event_name] || []).push(r));
@@ -118,6 +172,8 @@ function render(){
     ['Units', `<span class="${bet.u >= 0 ? 'pos' : 'neg'}">${bet.u >= 0 ? '+' : ''}${bet.u.toFixed(2)}</span>`],
     ['Return per pick', `<span class="${bet.roi >= 0 ? 'pos' : 'neg'}">${bet.roi >= 0 ? '+' : ''}${(bet.roi * 100).toFixed(1)}%</span>`]
   ].map(([l, v]) => `<div class="stat"><div class="l">${l}</div><div class="v">${v}</div></div>`).join('');
+  { const keep = graded.filter(r => r.tier !== '\u26a0\ufe0f REVIEW' && !blocked(r)), k = tally(keep);
+    $('#limitCmp').innerHTML = `<b style="color:var(--ink)">With the longshot limit</b> (passing on +${LIMIT} or longer unless Strong, now built into the model): ${rec(k)}, <span class="${k.u >= 0 ? 'pos' : 'neg'}">${k.u >= 0 ? '+' : ''}${k.u.toFixed(2)} units</span>, ${(k.roi*100).toFixed(1)}% per pick.`; }
   $('#tiers').innerHTML = `<thead><tr><th>Tier</th><th class="r">Record</th><th class="r">Win rate</th><th class="r">Units</th><th class="r">Return</th></tr></thead><tbody>${TIERS.map(([t, cls, label]) => { const x = tally(graded.filter(r => r.tier === t)); if (!x.n && !x.p) return '';
     return `<tr><td><span class="tier ${cls}">${label}</span></td><td class="r">${rec(x)}</td><td class="r">${x.n ? Math.round(x.w / x.n * 100) + '%' : '\u2014'}</td><td class="r ${x.u >= 0 ? 'pos' : 'neg'}">${x.u >= 0 ? '+' : ''}${x.u.toFixed(2)}</td><td class="r ${x.roi >= 0 ? 'pos' : 'neg'}">${(x.roi * 100).toFixed(1)}%</td></tr>`; }).join('')}</tbody>`;
   // past cards
@@ -134,7 +190,7 @@ function card(r){
   const model = r.blended_prob != null ? r.blended_prob : r.model_prob;
   return `<div class="pk ${cls}"><div class="who"><span class="tier ${cls}">${esc(label)}</span>${esc(r.fighter)} <small>vs ${esc(r.opponent)}</small>${res ? `<span class="res ${res}">${res === 'win' ? 'W' : res === 'loss' ? 'L' : (r.result || '').toUpperCase()}</span>` : ''}</div>
     <div class="odds">${esc(am(r.moneyline))}</div>
-    <div class="row2"><span>Model ${pct(model)}</span><span>Market ${pct(r.market_fair_prob)}</span><span class="${(r.edge||0) >= 0 ? 'pos' : 'neg'}">Edge ${r.edge != null ? ((r.edge >= 0 ? '+' : '') + (r.edge * 100).toFixed(1) + '%') : '\u2014'}</span>${r.bookmaker ? `<span>${esc(r.bookmaker)}</span>` : ''}${res ? `<span class="${(+r.units||0) >= 0 ? 'pos' : 'neg'}">${(+r.units||0) >= 0 ? '+' : ''}${(+r.units||0).toFixed(2)}u</span>` : ''}</div></div>`;
+    <div class="row2">${(() => { const c = aiChance(r); if (c == null) return ''; const v = c*dec(r.moneyline) - 1; return `<span style="font-weight:700;color:${v > 0 ? 'var(--over)' : 'var(--under)'}">AI ${Math.round(c*100)}%, ${v >= 0 ? '+' : ''}${(v*100).toFixed(0)}% value</span>`; })()}${blocked(r) ? '<span style="color:var(--warn);font-weight:700">Longshot limit: pass</span>' : ''}<span>Model ${pct(model)}</span><span>Market ${pct(r.market_fair_prob)}</span><span class="${(r.edge||0) >= 0 ? 'pos' : 'neg'}">Edge ${r.edge != null ? ((r.edge >= 0 ? '+' : '') + (r.edge * 100).toFixed(1) + '%') : '\u2014'}</span>${r.bookmaker ? `<span>${esc(r.bookmaker)}</span>` : ''}${res ? `<span class="${(+r.units||0) >= 0 ? 'pos' : 'neg'}">${(+r.units||0) >= 0 ? '+' : ''}${(+r.units||0).toFixed(2)}u</span>` : ''}</div></div>`;
 }
 document.querySelector('#tierFilter').addEventListener('click', e => { const b = e.target.closest('[data-t]'); if (!b) return; tierView = b.dataset.t; document.querySelectorAll('#tierFilter button').forEach(x => x.setAttribute('aria-pressed', x === b)); render(); });
 async function ungz(b64){ const bin = Uint8Array.from(atob(b64), c => c.charCodeAt(0)); const ds = new Blob([bin]).stream().pipeThrough(new DecompressionStream('gzip')); return await new Response(ds).text(); }
@@ -154,7 +210,8 @@ async function ungz(b64){ const bin = Uint8Array.from(atob(b64), c => c.charCode
     gate('');
     const load = async () => { try { const s = await fs.doc('sports/ufc/public/picks').get(); if (!s.exists) { if (!PICKS.length) $('#upcoming').innerHTML = '<div class="empty">No UFC data yet. Run the UFC upload on your PC.</div>'; return; }
       const m = s.data(); PICKS = JSON.parse(m.gz ? await ungz(m.s) : m.s); localStorage.setItem('ufclab:picks', JSON.stringify(PICKS)); render(); } catch(e){} };
-    load(); setInterval(load, 120000);
+    const loadModel = async () => { try { const s = await fs.doc('sports/ufc/public/model').get(); if (s.exists) { MODEL = s.data(); renderAI(); } } catch(e){} };
+    load(); loadModel(); setInterval(() => { load(); loadModel(); }, 120000);
   });
 })();
 </script>
