@@ -484,6 +484,14 @@ button.gc{border:0;cursor:pointer;font:inherit}
 .lweights{display:grid;gap:4px;grid-template-columns:repeat(auto-fill,minmax(230px,1fr))}
 .lw{display:flex;justify-content:space-between;gap:10px;padding:6px 10px;border-radius:8px;background:var(--panel2);font-size:13.5px}
 /* Odds board */
+.ben{background:var(--over-soft);border:1px solid rgba(46,229,157,.35);border-radius:12px;padding:10px 12px;margin:10px 0}
+.ben-h{font-size:14px;margin-bottom:6px}
+.ben-list{display:flex;flex-wrap:wrap;gap:6px}
+.ben-chip{display:inline-block;font-size:13px;padding:4px 10px;border-radius:999px;text-decoration:none;color:var(--ink);background:var(--panel)}
+.ben-chip.up b{color:var(--over)} .ben-chip.down b{color:var(--under)}
+tr.bd-up td{background:rgba(46,229,157,.07)} tr.bd-up td.bd-p{box-shadow:inset 3px 0 0 var(--over)}
+tr.bd-down td.bd-p{box-shadow:inset 3px 0 0 var(--under)}
+.bd-dl{font-size:11.5px;font-weight:700}
 .bd-hd{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:6px}
 .bd-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:12px;max-height:70vh;overflow-y:auto}
 table.board{border-collapse:separate;border-spacing:0;font-size:13px;min-width:100%}
@@ -890,6 +898,7 @@ details.inj{margin-top:22px!important}
       <p class="sub" id="boardSub">Every book side by side with our projection and the edge on each side. Green = the best edge for that side. Flip injuries below and the whole board re-projects.</p>
       <div id="injScen"></div>
       <div class="chips" id="bStats" style="margin:10px 0 8px"></div>
+      <div id="boardBen"></div>
       <div class="bd-wrap"><table class="board" id="board"></table></div>
     </div>
     <div class="panel">
@@ -1507,10 +1516,10 @@ function normLines(L){
   return out;
 }
 // sharp reference books: shown for comparison, never used for picks (you can't bet them in CA)
-const REF_BOOKS = new Set(['pinnacle']);
+const REF_BOOKS = new Set(['pinnacle','novig']);   // sharp references: shown for comparison, not used for picks
 function sharpFor(p, stat, side){
   const L = p.lines && p.lines[stat]; if (!L || !L.books) return null;
-  const x = L.books.pinnacle; if (!x || !x.over || !x.under) return null;
+  const x = [L.books.pinnacle, L.books.novig].find(v => v && v.over && v.under); if (!x) return null;
   const po = 1/amToDec(+x.over), pu = 1/amToDec(+x.under), fairO = po/(po+pu);
   return {line: +x.line, over: +x.over, under: +x.under, fair: side === 'over' ? fairO : 1 - fairO};
 }
@@ -1554,7 +1563,7 @@ function computeStale(){
 }
 function renderStale(){
   staleRows = [];
-  const hasSharp = S.players.some(p => Object.values(p.lines || {}).some(L => L.books && L.books.pinnacle));
+  const hasSharp = S.players.some(p => Object.values(p.lines || {}).some(L => L.books && (L.books.pinnacle || L.books.novig)));
   if (!hasSharp) { $('#stale').innerHTML = `<div class="meta">Needs Pinnacle lines in your data file. Run the updated script, then import.</div>`; return; }
   const list = computeStale().filter(fitsStrat).slice(0, 12);
   $('#staleSub').textContent = list.length ? `${list.length} line${list.length>1?'s':''} your apps haven\u2019t caught up on, compared with Pinnacle\u2019s fair price (house cut removed). Biggest edge first. Tap one to add it.` : 'No stale lines right now: your apps match the sharp market within 4%. Check again after the next import.';
@@ -1599,7 +1608,7 @@ function renderShop(p){
   shopRows = es.map(e => { const odds = priceOf(e, S.side), r = evalProp(p, S.stat, e.line, S.side); return {e, odds, r, edge: odds===null ? NaN : r.prob - implied(odds)}; })
     .sort((a,b) => (isFinite(b.edge)?b.edge:-9) - (isFinite(a.edge)?a.edge:-9)).slice(0, 24);
   const sh = sharpFor(p, S.stat, S.side);
-  $('#shopSub').innerHTML = `Every app’s line for the ${S.side}, best edge first. Pick’em apps are measured against the break-even for a 3-pick entry (${pct(dfsBE(3),1)} a pick).${sh ? `<div class="sharp"><b>Sharp market (Pinnacle):</b> ${S.side} ${sh.line} has a fair chance of <b>${pct(sh.fair)}</b> with the house cut removed (${fmtOdds(sh.over)} / ${fmtOdds(sh.under)}). Pinnacle is the market other books follow; you can’t bet it in CA, it’s here to check prices against.</div>` : ''}`;
+  $('#shopSub').innerHTML = `Every app’s line for the ${S.side}, best edge first. Pick’em apps are measured against the break-even for a 3-pick entry (${pct(dfsBE(3),1)} a pick).${sh ? `<div class="sharp"><b>Sharp market (Pinnacle or Novig):</b> ${S.side} ${sh.line} has a fair chance of <b>${pct(sh.fair)}</b> with the house cut removed (${fmtOdds(sh.over)} / ${fmtOdds(sh.under)}). Pinnacle is the market other books follow; you can’t bet it in CA, it’s here to check prices against.</div>` : ''}`;
   $('#shopTbl').innerHTML = `<thead><tr><th>App</th><th class="r">Line</th><th class="r">Price</th><th class="r">L10</th><th class="r">Model</th><th class="r">Edge</th><th></th></tr></thead><tbody>` +
     shopRows.map((x,i) => { const cur = S.lineIsBook && S.lineBk===x.e.book && S.line===x.e.line;
       return `<tr><td class="pname">${esc(bookName(x.e.book))}${i===0 && isFinite(x.edge) ? ' <span class="tag book">best</span>' : ''}</td><td class="r">${x.e.line}</td><td class="r">${x.e.dfs ? 'Pick’em' : x.odds===null ? '—' : fmtOdds(x.odds)}</td><td class="r">${hpCell(x.r.L10)}</td><td class="r">${pct(x.r.prob)}</td><td class="r ${x.edge>=0?'pos':'neg'}">${isFinite(x.edge) ? `${x.edge>=0?'+':''}${(x.edge*100).toFixed(1)}` : '—'}</td><td>${x.odds===null ? '' : `<button class="add ${cur?'on':''}" data-use="${i}">${cur?'Using':'Use'}</button>`}</td></tr>`; }).join('') + '</tbody>';
@@ -1785,7 +1794,7 @@ function renderAnalyzer(){
     ['Rest', r.nextRest===1 ? `<span class="neg">Back-to-back</span>${r.B2B.h+r.B2B.m?` (${r.B2B.h} of ${r.B2B.h+r.B2B.m} on B2Bs)`:''}` : r.nextRest ? `${r.nextRest-1} day${r.nextRest===2?'':'s'} off` : '—'],
     ['Teammates out', r.oa ? r.oa.det.map(x => `${esc(x.t.name.split(' ').slice(-1)[0])} ${isFinite(x.d) ? `${x.d>=0?'+':''}${f1(x.d)} without (${x.n} g)` : `only ${x.n} g without`}`).join(', ') + `, adds <span class="${r.oa.adj>=0?'pos':'neg'}">${r.oa.adj>=0?'+':''}${f1(r.oa.adj)}</span>` : 'None marked'],
     ['Spread of results (SD)', f1(r.sd)],
-    ['Sharp market (Pinnacle)', (() => { const sh = sharpFor(p, S.stat, S.side); if (!sh) return '—'; const d = r.prob - sh.fair; return sh.line === S.line ? `${pct(sh.fair)} fair at ${sh.line}, model ${d>=0?'+':''}${(d*100).toFixed(0)} pts ${Math.abs(d) > .12 ? '<span class="neg">(big gap: double-check)</span>' : ''}` : `${pct(sh.fair)} fair at ${sh.line} (different line)`; })()]
+    ['Sharp market (Pinnacle or Novig)', (() => { const sh = sharpFor(p, S.stat, S.side); if (!sh) return '—'; const d = r.prob - sh.fair; return sh.line === S.line ? `${pct(sh.fair)} fair at ${sh.line}, model ${d>=0?'+':''}${(d*100).toFixed(0)} pts ${Math.abs(d) > .12 ? '<span class="neg">(big gap: double-check)</span>' : ''}` : `${pct(sh.fair)} fair at ${sh.line} (different line)`; })()]
   ].map(([k,v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('');
   const inSlip = S.slip.find(l => l.pid===p.id && l.stat===S.stat);
   const noLine = !entries(p, S.stat).length; $('#addBtn').disabled = noLine;
@@ -1997,7 +2006,7 @@ function computeFinder(){
 }
 function hpCell(h){ const n=h.h+h.m; if(!n) return `<span class="hp n">—</span>`; const c = h.pct>=.7?'g':h.pct<.5?'b':'n'; return `<span class="hp ${c}" title="${h.h} of ${n}">${pct(h.pct)}</span>`; }
 /* ---------- Odds board (every book, both sides, edge % per side) + injury scenarios ---------- */
-const BOOK_ORDER = ['draftkings','fanduel','bovada','pinnacle','prizepicks','pick6','sleeper','underdog','betr_us_dfs','kalshi','prophetx','polymarket_us','polymarket'];
+const BOOK_ORDER = ['draftkings','fanduel','bovada','pinnacle','novig','prizepicks','pick6','sleeper','underdog','betr_us_dfs','kalshi','prophetx','polymarket_us','polymarket'];
 const PLAY_PCT = s => { const t = String(s || '').toLowerCase(); return /out/.test(t) ? 0 : /doubt/.test(t) ? 15 : /question|gtd|game.?time/.test(t) ? 50 : /day.?to.?day/.test(t) ? 60 : /probable/.test(t) ? 85 : null; };
 function setInj(id, state){
   if (state === 'auto') delete S.outMan[id]; else S.outMan[id] = state === 'out';
@@ -2012,6 +2021,8 @@ function renderInjScen(){
         <div class="seg seg-sm" data-scen="${esc(p.id)}"><button data-st="in" aria-pressed="${st==='in'}">In</button><button data-st="out" aria-pressed="${st==='out'}">Out</button><button data-st="auto" aria-pressed="${st==='auto'}" title="Use the injury report">Auto</button></div>
         <div class="scen-pct">${pc != null ? `${pc}%<small>to play</small>` : ''}</div></div>`; }).join('')}</div></details>` : '';
 }
+// projection with only the injury report (no manual In/Out), to see what the manual changes did
+function projAuto(p, k, line){ const saved = S.outMan; S.outMan = {}; try { return evalProp(p, k, line, 'over').proj; } finally { S.outMan = saved; } }
 function renderBoard(){
   renderInjScen();
   const stats = PICK_STATS.all.filter(k => S.players.some(p => onDay(p) && p.lines && p.lines[k]));
@@ -2033,17 +2044,26 @@ function renderBoard(){
         if (!price || !isFinite(price)) continue;
         sides[side] = {price, edge: pr(line, side) - implied(price), dfs};
       }
-      return {b, line, sides, ref: b === 'pinnacle'};
+      return {b, line, sides, ref: b === 'pinnacle' || b === 'novig'};
     });
     const best = {over: -1, under: -1};
     cells.forEach(c => { if (!c || c.ref) return; for (const sd of ['over','under']) if (c.sides[sd] && c.sides[sd].edge > best[sd]) best[sd] = c.sides[sd].edge; });
-    return {p, r0, mins, cells, best, top: Math.max(best.over, best.under)};
+    const manual = S.outMan && Object.keys(S.outMan).length, delta = manual ? r0.proj - projAuto(p, k, L.line) : 0;
+    return {p, r0, mins, cells, best, delta, top: Math.max(best.over, best.under)};
   }).sort((a,b) => b.top - a.top).slice(0, 150);
+  // beneficiaries strip
+  const outs = Object.keys(S.outMan || {}).filter(id => S.outMan[id]).map(id => S.byId[id]).filter(Boolean);
+  const ben = rows.filter(x => !isOut(x.p.id) && x.delta >= .4).sort((a,b) => b.delta - a.delta).slice(0, 10);
+  const hurt = rows.filter(x => !isOut(x.p.id) && x.delta <= -.4).sort((a,b) => a.delta - b.delta).slice(0, 4);
+  $('#boardBen').innerHTML = outs.length ? `<div class="ben"><div class="ben-h">With <b>${outs.map(p => esc(p.name)).join(', ')}</b> out: who steps up in ${esc(k)}</div>
+    ${ben.length ? `<div class="ben-list">${ben.map(x => `<a href="#" class="ben-chip up plink" data-pcard="${esc(x.p.id)}">\u25B2 ${esc(x.p.name)} <b>+${f1(x.delta)}</b></a>`).join('')}</div>` : '<div class="meta">No teammate projects up much on this stat. Try another stat.</div>'}
+    ${hurt.length ? `<div class="ben-list" style="margin-top:6px">${hurt.map(x => `<a href="#" class="ben-chip down plink" data-pcard="${esc(x.p.id)}">\u25BC ${esc(x.p.name)} <b>${f1(x.delta)}</b></a>`).join('')}</div>` : ''}
+    <div class="meta" style="font-size:12px;margin-top:6px">Based on how each teammate actually played in past games without them. Highlighted in the board below.</div></div>` : '';
   const ec = v => `<span class="be ${v >= .02 ? 'pos' : v <= -.04 ? 'neg' : ''}">${v >= 0 ? '+' : ''}${(v*100).toFixed(1)}%</span>`;
-  $('#board').innerHTML = `<thead><tr><th class="bd-p">Player</th><th class="bd-j">Projection</th>${books.map(b => `<th>${esc(bookName(b))}${b === 'pinnacle' ? '<small>sharp</small>' : ''}</th>`).join('')}</tr></thead><tbody>${rows.map(x => {
+  $('#board').innerHTML = `<thead><tr><th class="bd-p">Player</th><th class="bd-j">Projection</th>${books.map(b => `<th>${esc(bookName(b))}${b === 'pinnacle' || b === 'novig' ? '<small>sharp</small>' : ''}</th>`).join('')}</tr></thead><tbody>${rows.map(x => {
     const out = isOut(x.p.id);
-    return `<tr class="${out ? 'bd-out' : ''}"><td class="bd-p"><a href="#" class="plink" data-pcard="${esc(x.p.id)}">${esc(x.p.name)}</a><div class="meta">${esc(x.p.team)} ${x.p.next && x.p.next.home ? 'vs' : '@'} ${esc(x.p.next ? x.p.next.opp : '')}${out ? ' <b class="neg">OUT</b>' : x.p.status ? `, ${esc(x.p.status)}` : ''}</div></td>
-      <td class="bd-j"><b>${f1(x.r0.proj)}</b> <span class="meta">${esc(k)}</span>${x.mins != null ? `<div class="meta">${f1(x.mins)} min</div>` : ''}</td>
+    return `<tr class="${out ? 'bd-out' : x.delta >= .4 ? 'bd-up' : x.delta <= -.4 ? 'bd-down' : ''}"><td class="bd-p"><a href="#" class="plink" data-pcard="${esc(x.p.id)}">${esc(x.p.name)}</a><div class="meta">${esc(x.p.team)} ${x.p.next && x.p.next.home ? 'vs' : '@'} ${esc(x.p.next ? x.p.next.opp : '')}${out ? ' <b class="neg">OUT</b>' : x.p.status ? `, ${esc(x.p.status)}` : ''}</div></td>
+      <td class="bd-j"><b>${f1(x.r0.proj)}</b> <span class="meta">${esc(k)}</span>${Math.abs(x.delta) >= .4 ? `<div class="bd-dl ${x.delta > 0 ? 'pos' : 'neg'}">${x.delta > 0 ? '\u25B2 +' : '\u25BC '}${f1(x.delta)} with outs</div>` : ''}${x.mins != null ? `<div class="meta">${f1(x.mins)} min</div>` : ''}</td>
       ${x.cells.map(c => !c ? '<td class="bd-c"></td>' : `<td class="bd-c ${c.ref ? 'ref' : ''}">${['over','under'].map(sd => { const v = c.sides[sd]; if (!v) return '<div class="bd-s"></div>';
         const top = !c.ref && v.edge === x.best[sd] && v.edge > 0;
         return `<div class="bd-s ${top ? 'top' : ''}">${ec(v.edge)}<span class="bl">${sd === 'over' ? 'o' : 'u'}${c.line} ${v.dfs ? '<i>pick\u2019em</i>' : fmtOdds(v.price)}</span></div>`; }).join('')}</td>`).join('')}</tr>`; }).join('')}</tbody>`;
