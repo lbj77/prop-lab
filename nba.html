@@ -484,6 +484,18 @@ button.gc{border:0;cursor:pointer;font:inherit}
 .lweights{display:grid;gap:4px;grid-template-columns:repeat(auto-fill,minmax(230px,1fr))}
 .lw{display:flex;justify-content:space-between;gap:10px;padding:6px 10px;border-radius:8px;background:var(--panel2);font-size:13.5px}
 /* Game model cards */
+.glegend{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:13px;color:var(--muted);margin:2px 0 12px}
+.pl{display:inline-block;min-width:46px;text-align:center;font-family:var(--cond);font-weight:800;font-size:14px;padding:2px 8px;border-radius:7px;letter-spacing:.4px}
+.pl.bet{background:var(--over);color:#002417} .pl.lean{background:var(--warn);color:#2a1a00} .pl.pass{background:var(--panel);color:var(--muted);border:1px solid var(--line)}
+.plist{display:grid;gap:6px;margin-bottom:14px}
+.prow2{display:flex;gap:10px;align-items:flex-start;padding:9px 10px;border-radius:10px;background:var(--panel2);margin-top:6px}
+.prow2.pass{opacity:.7}
+.pmain{min-width:0} .ptxt{font-size:16px;font-weight:700}
+.prow2.pass .ptxt{font-weight:600;font-size:14px;color:var(--muted)}
+.won,.lost,.push{display:inline-block;font-size:11.5px;font-weight:800;padding:1px 7px;border-radius:6px;margin-left:4px}
+.won{background:var(--over);color:#002417} .lost{background:var(--under);color:#2a0006} .push{background:var(--panel);color:var(--muted)}
+.gdet{margin-top:8px} .gdet summary{cursor:pointer;color:var(--ball);font-size:13px;font-weight:600}
+.gdet table{margin-top:6px;font-size:12.5px}
 .gnav{align-items:center;gap:8px 10px}
 .gnav #gDay{font-family:var(--cond);font-size:19px;min-width:110px;text-align:center}
 .gnav .ghost{min-width:40px;font-size:20px;padding:4px 10px}
@@ -954,6 +966,8 @@ details.inj{margin-top:22px!important}
       <p class="sub" id="gamesSub">Spread, total and moneyline from your NBA game model: Four Factors and the Scoring model, side by side.</p>
       <div class="ctrl-row gnav"><button class="ghost" id="gPrev" aria-label="Previous day">‹</button><b id="gDay"></b><button class="ghost" id="gNext" aria-label="Next day">›</button>
         <div class="seg" id="gFilter"><button data-gf="all">All games</button><button data-gf="plays">Plays only</button><button data-gf="agree">Both agree</button><button data-gf="ai">AI likes</button></div></div>
+      <div class="glegend"><span><b class="pl bet">BET</b> both models agree: the strongest play</span><span><b class="pl lean">LEAN</b> only one model likes it: smaller bet or skip</span><span><b class="pl pass">PASS</b> models disagree or see no edge</span></div>
+      <div id="gamePlays"></div>
       <div class="gcards" id="gameCards"></div>
     </div>
     <div class="panel" style="margin-top:14px"><div id="gameAI"></div></div>
@@ -3016,28 +3030,55 @@ function renderGames(){
   const aiBest = g => Math.max(0, ...gameBets(g).map(b => gaiChance(b) || 0));
   const list = GAMES.filter(g => g.game_date === day && (gf === 'all' || (gf === 'plays' ? hasPlay(g) : gf === 'ai' ? aiBest(g) >= .55 : (g.spread_signal === 'AGREE' || g.total_signal === 'AGREE'))));
   if (gf === 'ai') list.sort((a,b) => aiBest(b) - aiBest(a));
-  $('#gamesSub').textContent = `${list.length} game${list.length===1?'':'s'}${day === want ? ' today' : ''}. Green edge = both models agree, yellow = one model, orange = they disagree. Your model posts new picks around 8 AM; they show here after the 11 AM upload.`;
+  $('#gamesSub').textContent = `${list.length} game${list.length===1?'':'s'}${day === want ? ' today' : ''}. Your model posts new picks around 8 AM; they show here after the 11 AM upload.`;
+  // one plain-English play per market
+  const nickOf = name => { const n = String(name || '').trim(); const m = n.match(/(Trail Blazers|76ers|[A-Za-z]+)$/); return m ? m[1] : n; };
+  const fmtLine = v => v == null ? '' : v === 0 ? 'PK' : (v > 0 ? '+' : '') + v;
+  function plays(g){
+    const vs = gnum(g.vegas_spread_home), vt = gnum(g.vegas_total), out = [], bets = gameBets(g);
+    const level = sigv => sigv === 'AGREE' ? 'bet' : (sigv === 'FF only' || sigv === 'APP only') ? 'lean' : 'pass';
+    const who = sigv => sigv === 'AGREE' ? 'Both models agree' : sigv === 'FF only' ? 'Only the Four Factors model' : sigv === 'APP only' ? 'Only the Scoring model' : sigv === 'SPLIT' ? 'The two models disagree' : 'Neither model sees an edge';
+    const ai = (mkt, play) => { const x = bets.find(b => b.mkt === mkt && b.play === play); const c = x ? gaiChance(x) : null; return c == null ? null : c; };
+    // spread
+    { const lv = level(g.spread_signal), team = g.spread_signal === 'APP only' ? g.app_spread_play : g.spread_play;
+      if (lv !== 'pass' && team && team !== 'NO PLAY' && vs != null) { const home = team === g.home_team, line = home ? vs : -vs;
+        out.push({mkt: 'Spread', lv, text: `${nickOf(team)} ${fmtLine(line)}`, why: who(g.spread_signal), res: g.spread_signal === 'APP only' ? g.app_spread_result : g.spread_result, ai: ai('spread', team)}); }
+      else out.push({mkt: 'Spread', lv: 'pass', text: 'No spread bet', why: who(g.spread_signal)}); }
+    // total
+    { const lv = level(g.total_signal), pick = g.total_signal === 'APP only' ? g.app_total_play : g.total_play;
+      if (lv !== 'pass' && (pick === 'OVER' || pick === 'UNDER') && vt != null)
+        out.push({mkt: 'Total', lv, text: `${pick === 'OVER' ? 'Over' : 'Under'} ${vt}`, why: who(g.total_signal), res: g.total_signal === 'APP only' ? g.app_total_result : g.total_result, ai: ai('total', pick)});
+      else out.push({mkt: 'Total', lv: 'pass', text: 'No total bet', why: who(g.total_signal)}); }
+    return out;
+  }
+  const resTxt = r => r === 'W' ? '<span class="won">WON</span>' : r === 'L' ? '<span class="lost">LOST</span>' : r === 'P' ? '<span class="push">PUSH</span>' : '';
+  const aiTxt = c => c == null ? '' : `<span class="gai ${c >= .55 ? 'good' : c < .5 ? 'bad' : ''}">AI ${Math.round(c*100)}%</span>`;
+  // the day's plays, strongest first, at the top
+  const all = []; list.forEach(g => plays(g).forEach(pl => { if (pl.lv !== 'pass') all.push({...pl, g}); }));
+  all.sort((a,b) => (a.lv === b.lv ? 0 : a.lv === 'bet' ? -1 : 1) || ((b.ai || 0) - (a.ai || 0)));
+  $('#gamePlays').innerHTML = all.length ? `<div class="pc-h" style="margin:4px 0 8px">The plays (${all.filter(x => x.lv === 'bet').length} bet, ${all.filter(x => x.lv === 'lean').length} lean)</div>
+    <div class="plist">${all.map(x => `<div class="prow2 ${x.lv}"><b class="pl ${x.lv}">${x.lv.toUpperCase()}</b><div class="pmain"><div class="ptxt">${esc(x.text)} <span class="meta">${x.mkt.toLowerCase()}</span> ${aiTxt(x.ai)} ${resTxt(x.res)}</div><div class="meta">${esc(nickOf(x.g.away_team))} @ ${esc(nickOf(x.g.home_team))}. ${esc(x.why)}.</div></div></div>`).join('')}</div>`
+    : `<div class="empty" style="padding:6px 0 12px">No bets on this day: the models either disagree or see no edge.</div>`;
+  // one card per game: the play first, model details tucked away
   box.innerHTML = list.map(g => {
-    const A = teamAbbr(g.away_team), H = teamAbbr(g.home_team);
-    const vs = gnum(g.vegas_spread_home), vt = gnum(g.vegas_total);
-    const fav = (a, h) => a == null || h == null ? '\u2014' : (h >= a ? `${H} by ${(h-a).toFixed(1)}` : `${A} by ${(a-h).toFixed(1)}`);
-    const ffS = fav(gnum(g.projected_away_score), gnum(g.projected_home_score)), apS = fav(gnum(g.app_away_score), gnum(g.app_home_score));
-    const vS = vs == null ? '\u2014' : vs === 0 ? 'Pick\u2019em' : vs < 0 ? `${H} ${vs}` : `${A} ${(-vs)}`;
-    const r1 = v => v == null ? null : Math.round(v*10)/10, ffT = r1(gnum(g.projected_total)), apT = r1(gnum(g.app_total));
-    const far = (ffT != null && vt != null && Math.abs(ffT - vt) >= 15) || (gnum(g.projected_spread) != null && vs != null && Math.abs(gnum(g.projected_spread) + vs) >= 10);
+    const A = nickOf(g.away_team), H = nickOf(g.home_team), vs = gnum(g.vegas_spread_home), vt = gnum(g.vegas_total);
     const done = g.actual_home_score !== '' && g.actual_home_score != null;
-    const bets = gameBets(g), aiOf = (mkt, play) => { const b = bets.find(x => x.mkt === mkt && x.play === play); const c = b ? gaiChance(b) : null; return c == null ? '' : `<span class="gai ${c >= .55 ? 'good' : c < .5 ? 'bad' : ''}" title="Game AI win chance">AI ${Math.round(c*100)}%</span>`; };
-    const mk = (label, sig, ff, ap, rf, ra, extra) => { const s2 = SIG[sig] || [sig || '\u2014', 'none']; const pick = sig === 'AGREE' || sig === 'FF only' ? ff : sig === 'APP only' ? ap : null; const mkt = label === 'Spread' ? 'spread' : 'total';
-      return `<div class="gmk ${s2[1]}"><div class="gmk-h"><span>${label}</span><span class="gsig ${s2[1]}">${esc(s2[0])}</span></div>
-        <div class="gmk-p">${pick && pick !== 'NO PLAY' ? `<b>${esc(playTxt(pick, g))}</b> ${aiOf(mkt, pick)}` : sig === 'SPLIT' ? `<b>FF ${esc(playTxt(ff, g))}</b> ${aiOf(mkt, ff)} <b>/ Scoring ${esc(playTxt(ap, g))}</b> ${aiOf(mkt, ap)}` : '<span class="meta">No play</span>'} ${done ? resBadge(sig === 'APP only' ? ra : rf) : ''}</div>
-        <div class="meta gmk-d">${extra}</div></div>`; };
-    const ml = g.moneyline_signal === 'AGREE' ? teamAbbr(g.moneyline_play) : null;
-    return `<div class="gcard ${g.spread_signal === 'AGREE' || g.total_signal === 'AGREE' ? 'agree' : (g.spread_signal === 'SPLIT' || g.total_signal === 'SPLIT') ? 'split' : (g.spread_signal || '').includes('only') || (g.total_signal || '').includes('only') ? 'one' : ''}">
-      <div class="gc-hd"><b>${esc(A)} @ ${esc(H)}</b>${far ? ' <span title="A model is far from Vegas">\u26A0\uFE0F</span>' : ''}${done ? `<span class="gfinal">Final ${esc(g.actual_away_score)}\u2013${esc(g.actual_home_score)}</span>` : ''}</div>
-      <div class="meta" style="font-size:12.5px">Vegas: ${esc(vS)}, O/U ${vt ?? '\u2014'}</div>
-      ${mk('Spread', g.spread_signal, g.spread_play, g.app_spread_play, g.spread_result, g.app_spread_result, `Four Factors ${esc(ffS)}, Scoring ${esc(apS)}`)}
-      ${mk('Total', g.total_signal, g.total_play, g.app_total_play, g.total_result, g.app_total_result, `Four Factors ${ffT ?? '\u2014'}, Scoring ${apT ?? '\u2014'}`)}
-      <div class="meta gml">Projected winner: ${ml ? `<b>${esc(ml)}</b> (both models)` : g.moneyline_signal === 'SPLIT' ? 'models split' : '\u2014'}${done && ml ? ' ' + resBadge(g.moneyline_result) : ''}</div>
+    const fav = (a, h) => a == null || h == null ? '\u2014' : (h >= a ? `${H} by ${(h-a).toFixed(1)}` : `${A} by ${(a-h).toFixed(1)}`);
+    const r1 = v => v == null ? '\u2014' : (Math.round(v*10)/10);
+    const pls = plays(g), best = pls.some(x => x.lv === 'bet') ? 'agree' : pls.some(x => x.lv === 'lean') ? 'one' : '';
+    const ml = g.moneyline_signal === 'AGREE' ? nickOf(g.moneyline_play) : null;
+    return `<div class="gcard ${best}">
+      <div class="gc-hd"><b>${esc(A)} @ ${esc(H)}</b>${done ? `<span class="gfinal">Final ${esc(g.actual_away_score)}\u2013${esc(g.actual_home_score)}</span>` : ''}</div>
+      <div class="meta" style="font-size:12.5px">Vegas: ${esc(vs == null ? '\u2014' : vs < 0 ? `${H} ${vs}` : vs > 0 ? `${A} ${-vs}` : 'Pick\u2019em')}, total ${vt ?? '\u2014'}</div>
+      ${pls.map(x => `<div class="prow2 ${x.lv}"><b class="pl ${x.lv}">${x.lv.toUpperCase()}</b><div class="pmain"><div class="ptxt">${esc(x.text)} ${x.lv !== 'pass' ? aiTxt(x.ai) : ''} ${x.lv !== 'pass' ? resTxt(x.res) : ''}</div><div class="meta">${esc(x.why)}</div></div></div>`).join('')}
+      ${ml ? `<div class="meta gml">Both models pick <b>${esc(ml)}</b> to win${done ? ' ' + resTxt(g.moneyline_result) : ''}</div>` : ''}
+      <details class="gdet"><summary>How the two models see it</summary>
+        <table class="res"><thead><tr><th></th><th>Four Factors</th><th>Scoring</th><th>Vegas</th></tr></thead><tbody>
+          <tr><td>Winner</td><td>${esc(fav(gnum(g.projected_away_score), gnum(g.projected_home_score)))}</td><td>${esc(fav(gnum(g.app_away_score), gnum(g.app_home_score)))}</td><td>${esc(vs == null ? '\u2014' : vs < 0 ? `${H} by ${-vs}` : vs > 0 ? `${A} by ${vs}` : 'Even')}</td></tr>
+          <tr><td>Total</td><td>${r1(gnum(g.projected_total))}</td><td>${r1(gnum(g.app_total))}</td><td>${vt ?? '\u2014'}</td></tr>
+          <tr><td>Spread pick</td><td>${esc(g.spread_play && g.spread_play !== 'NO PLAY' ? nickOf(g.spread_play) : '\u2014')}</td><td>${esc(g.app_spread_play && g.app_spread_play !== 'NO PLAY' ? nickOf(g.app_spread_play) : '\u2014')}</td><td></td></tr>
+          <tr><td>Total pick</td><td>${esc(g.total_play && g.total_play !== 'NO PLAY' ? (g.total_play === 'OVER' ? 'Over' : 'Under') : '\u2014')}</td><td>${esc(g.app_total_play && g.app_total_play !== 'NO PLAY' ? (g.app_total_play === 'OVER' ? 'Over' : 'Under') : '\u2014')}</td><td></td></tr>
+        </tbody></table></details>
     </div>`; }).join('');
   // running record
   const tally = (pred) => { const o = {W:0, L:0, P:0}; GAMES.forEach(g => { const r = pred(g); if (o[r] != null) o[r]++; }); return o; };
