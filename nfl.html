@@ -483,6 +483,32 @@ button.gc{border:0;cursor:pointer;font:inherit}
 .runrep pre{white-space:pre-wrap;font-size:12px;color:var(--muted);margin:6px 0 0}
 .lweights{display:grid;gap:4px;grid-template-columns:repeat(auto-fill,minmax(230px,1fr))}
 .lw{display:flex;justify-content:space-between;gap:10px;padding:6px 10px;border-radius:8px;background:var(--panel2);font-size:13.5px}
+/* Odds board */
+.bd-hd{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:6px}
+.bd-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:12px;max-height:70vh;overflow-y:auto}
+table.board{border-collapse:separate;border-spacing:0;font-size:13px;min-width:100%}
+table.board th{position:sticky;top:0;z-index:2;background:var(--panel2);font-size:12px;color:var(--muted);padding:8px;text-align:center;white-space:nowrap;border-bottom:1px solid var(--line)}
+table.board th small{display:block;font-size:10px;color:var(--ball)}
+table.board td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-align:middle;white-space:nowrap}
+.bd-p{position:sticky;left:0;z-index:1;background:var(--panel);min-width:150px;max-width:180px;white-space:normal!important;text-align:left!important}
+table.board th.bd-p{z-index:3;background:var(--panel2)}
+.bd-p a{color:var(--ink);font-weight:700;text-decoration:none}
+.bd-j{text-align:center}
+.bd-c{text-align:center;border-left:1px solid var(--line)}
+.bd-c.ref{background:rgba(61,220,255,.05)}
+.bd-s{display:flex;gap:8px;justify-content:space-between;align-items:center;padding:3px 6px;border-radius:6px;min-height:22px}
+.bd-s.top{background:var(--over-soft);outline:1px solid rgba(46,229,157,.45)}
+.bd-s .bl{font-family:var(--cond);font-weight:700;font-size:14px}
+.bd-s .bl i{font-style:normal;font-size:11px;color:var(--muted)}
+.be{font-weight:700;font-size:12px;min-width:46px;text-align:left}
+tr.bd-out td{opacity:.45}
+.scen{background:var(--panel2);border-radius:12px;padding:8px 12px}
+.scen summary{cursor:pointer}
+.scen-list{display:grid;gap:6px;margin-top:8px}
+.scen-row{display:grid;grid-template-columns:minmax(0,1fr) auto 56px;gap:10px;align-items:center;padding:6px 0;border-top:1px solid var(--line)}
+.seg-sm button{padding:4px 10px;font-size:13px}
+.scen-pct{text-align:center;font-family:var(--cond);font-weight:800;font-size:18px;line-height:1}
+.scen-pct small{display:block;font-family:var(--body);font-weight:500;font-size:10.5px;color:var(--muted)}
 /* Strategy filter */
 .stratbar{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;margin:4px 0 8px}
 .stratbar select{max-width:100%}
@@ -859,6 +885,13 @@ details.inj{margin-top:22px!important}
 
   <!-- FINDER -->
   <section class="view" id="view-finder" hidden>
+    <div class="panel" id="boardPanel">
+      <div class="bd-hd"><h2 style="margin:0">Odds board</h2><div class="seg" id="fMode"><button data-fm="board">Odds board</button><button data-fm="finder">Prop finder</button></div></div>
+      <p class="sub" id="boardSub">Every book side by side with our projection and the edge on each side. Green = the best edge for that side. Flip injuries below and the whole board re-projects.</p>
+      <div id="injScen"></div>
+      <div class="chips" id="bStats" style="margin:10px 0 8px"></div>
+      <div class="bd-wrap"><table class="board" id="board"></table></div>
+    </div>
     <div class="panel">
       <h2>Prop finder</h2>
       <p class="sub" id="finderSub">Scans every player and stat, keeps the props that clear your bars, and ranks them.</p>
@@ -1083,7 +1116,7 @@ const S = {
   pid:null, stat:Object.keys(STATS)[0], side:'over', line:null, odds:-110, lineIsBook:false,
   win:10, opp:'ALL', venue:'all', minMin:0,
   w: Object.assign({l5:30,l10:30,l30:25,opp:15,def:50}, lsGet(LSP+'w')||{}),
-  defWin: [5,10,15,30,82].includes(lsGet(LSP+'defWin')) ? lsGet(LSP+'defWin') : 30, defPos: lsGet(LSP+'defPos') || 'all', calibOn: lsGet(LSP+'calibOn') !== false, learnOn: lsGet(LSP+'learnOn') !== false, strat: lsGet(LSP+'strat') || 'all', grades: lsGet(LSP+'grades') || ['A','B','C','D'], day: null, oddsFmt: lsGet(LSP+'oddsFmt') || 'am', dstat:CFG.dstats[0], dsort:CFG.dstats[0], outMan: lsGet(LSP+'out') || {},
+  defWin: [5,10,15,30,82].includes(lsGet(LSP+'defWin')) ? lsGet(LSP+'defWin') : 30, defPos: lsGet(LSP+'defPos') || 'all', calibOn: lsGet(LSP+'calibOn') !== false, learnOn: lsGet(LSP+'learnOn') !== false, fmode: lsGet(LSP+'fmode') || 'board', strat: lsGet(LSP+'strat') || 'all', grades: lsGet(LSP+'grades') || ['A','B','C','D'], day: null, oddsFmt: lsGet(LSP+'oddsFmt') || 'am', dstat:CFG.dstats[0], dsort:CFG.dstats[0], outMan: lsGet(LSP+'out') || {},
   book: lsGet(LSP+'book') || 'any', lineBk: null,
   pay: Object.assign({2:3, 3:5, 4:10, 5:20, 6:37.5}, lsGet(LSP+'pay') || {}),
   slip: lsGet(LSP+'slip') || [],
@@ -1963,7 +1996,68 @@ function computeFinder(){
   finderRows = rows; return rows;
 }
 function hpCell(h){ const n=h.h+h.m; if(!n) return `<span class="hp n">—</span>`; const c = h.pct>=.7?'g':h.pct<.5?'b':'n'; return `<span class="hp ${c}" title="${h.h} of ${n}">${pct(h.pct)}</span>`; }
+/* ---------- Odds board (every book, both sides, edge % per side) + injury scenarios ---------- */
+const BOOK_ORDER = ['draftkings','fanduel','bovada','pinnacle','prizepicks','pick6','sleeper','underdog','betr_us_dfs','kalshi','prophetx','polymarket_us','polymarket'];
+const PLAY_PCT = s => { const t = String(s || '').toLowerCase(); return /out/.test(t) ? 0 : /doubt/.test(t) ? 15 : /question|gtd|game.?time/.test(t) ? 50 : /day.?to.?day/.test(t) ? 60 : /probable/.test(t) ? 85 : null; };
+function setInj(id, state){
+  if (state === 'auto') delete S.outMan[id]; else S.outMan[id] = state === 'out';
+  lsSet(LSP+'out', S.outMan); setTimeout(refreshMissing, 0);
+}
+function renderInjScen(){
+  const list = S.players.filter(p => onDay(p) && p.next && (PLAY_PCT(p.status) != null && PLAY_PCT(p.status) > 0 || (S.outMan && p.id in S.outMan)))
+    .sort((a,b) => (PLAY_PCT(a.status) ?? 50) - (PLAY_PCT(b.status) ?? 50)).slice(0, 24);
+  $('#injScen').innerHTML = list.length ? `<details class="scen" ${S.scenOpen ? 'open' : ''}><summary><b>Injury scenarios</b> <span class="meta">${list.length} player${list.length===1?'':'s'} in doubt today. Set In or Out to re-project teammates.</span></summary>
+    <div class="scen-list">${list.map(p => { const st = p.id in S.outMan ? (S.outMan[p.id] ? 'out' : 'in') : 'auto', pc = PLAY_PCT(p.status);
+      return `<div class="scen-row"><div class="scen-who"><b>${esc(p.name)}</b> <span class="meta">${esc(p.team)} ${p.next.home ? 'vs' : '@'} ${esc(p.next.opp)}${p.status ? `, ${esc(p.status)}` : ''}</span></div>
+        <div class="seg seg-sm" data-scen="${esc(p.id)}"><button data-st="in" aria-pressed="${st==='in'}">In</button><button data-st="out" aria-pressed="${st==='out'}">Out</button><button data-st="auto" aria-pressed="${st==='auto'}" title="Use the injury report">Auto</button></div>
+        <div class="scen-pct">${pc != null ? `${pc}%<small>to play</small>` : ''}</div></div>`; }).join('')}</div></details>` : '';
+}
+function renderBoard(){
+  renderInjScen();
+  const stats = PICK_STATS.all.filter(k => S.players.some(p => onDay(p) && p.lines && p.lines[k]));
+  if (!S.bstat || !stats.includes(S.bstat)) S.bstat = stats[0];
+  $('#bStats').innerHTML = stats.map(k => `<button class="chip" data-bs="${esc(k)}" aria-pressed="${k===S.bstat}">${esc(k)}</button>`).join('');
+  const k = S.bstat; if (!k) { $('#board').innerHTML = '<tbody><tr><td class="meta" style="padding:14px">No book lines on the selected day yet.</td></tr></tbody>'; return; }
+  const ps = S.players.filter(p => onDay(p) && p.lines && p.lines[k] && p.lines[k].books);
+  const books = BOOK_ORDER.filter(b => ps.some(p => Object.keys(p.lines[k].books).some(x => baseBook(x) === b && !/~/.test(x))));
+  const rows = ps.map(p => {
+    const L = p.lines[k], cache = {};
+    const pr = (line, side) => { const key = line + side; if (!(key in cache)) cache[key] = evalProp(p, k, line, side).prob; return cache[key]; };
+    const r0 = evalProp(p, k, L.line, 'over'), mins = NBA ? mean(p.games.slice(0, 10).map(g => g.min || 0)) : null;
+    const cells = books.map(b => {
+      const key = Object.keys(L.books).find(x => baseBook(x) === b && !/~/.test(x)); if (!key) return null;
+      const e = L.books[key], dfs = DFS.has(b), line = +e.line, sides = {};
+      for (const side of ['over','under']) {
+        if (!sideOK(k, line, side)) continue;
+        const price = dfs ? decToAm(1/dfsBE(3)) : +(side === 'over' ? e.over : e.under);
+        if (!price || !isFinite(price)) continue;
+        sides[side] = {price, edge: pr(line, side) - implied(price), dfs};
+      }
+      return {b, line, sides, ref: b === 'pinnacle'};
+    });
+    const best = {over: -1, under: -1};
+    cells.forEach(c => { if (!c || c.ref) return; for (const sd of ['over','under']) if (c.sides[sd] && c.sides[sd].edge > best[sd]) best[sd] = c.sides[sd].edge; });
+    return {p, r0, mins, cells, best, top: Math.max(best.over, best.under)};
+  }).sort((a,b) => b.top - a.top).slice(0, 150);
+  const ec = v => `<span class="be ${v >= .02 ? 'pos' : v <= -.04 ? 'neg' : ''}">${v >= 0 ? '+' : ''}${(v*100).toFixed(1)}%</span>`;
+  $('#board').innerHTML = `<thead><tr><th class="bd-p">Player</th><th class="bd-j">Projection</th>${books.map(b => `<th>${esc(bookName(b))}${b === 'pinnacle' ? '<small>sharp</small>' : ''}</th>`).join('')}</tr></thead><tbody>${rows.map(x => {
+    const out = isOut(x.p.id);
+    return `<tr class="${out ? 'bd-out' : ''}"><td class="bd-p"><a href="#" class="plink" data-pcard="${esc(x.p.id)}">${esc(x.p.name)}</a><div class="meta">${esc(x.p.team)} ${x.p.next && x.p.next.home ? 'vs' : '@'} ${esc(x.p.next ? x.p.next.opp : '')}${out ? ' <b class="neg">OUT</b>' : x.p.status ? `, ${esc(x.p.status)}` : ''}</div></td>
+      <td class="bd-j"><b>${f1(x.r0.proj)}</b> <span class="meta">${esc(k)}</span>${x.mins != null ? `<div class="meta">${f1(x.mins)} min</div>` : ''}</td>
+      ${x.cells.map(c => !c ? '<td class="bd-c"></td>' : `<td class="bd-c ${c.ref ? 'ref' : ''}">${['over','under'].map(sd => { const v = c.sides[sd]; if (!v) return '<div class="bd-s"></div>';
+        const top = !c.ref && v.edge === x.best[sd] && v.edge > 0;
+        return `<div class="bd-s ${top ? 'top' : ''}">${ec(v.edge)}<span class="bl">${sd === 'over' ? 'o' : 'u'}${c.line} ${v.dfs ? '<i>pick\u2019em</i>' : fmtOdds(v.price)}</span></div>`; }).join('')}</td>`).join('')}</tr>`; }).join('')}</tbody>`;
+  $('#boardSub').textContent = `${rows.length} players with ${k} lines${activeDay() ? `, ${dayLabel(activeDay())}` : ''}. Edge = our chance minus the price\u2019s implied chance (pick\u2019em apps vs a 3-pick break-even). Green = best edge for that side; Pinnacle is shown as the sharp reference.`;
+}
+function renderFinderMode(){
+  const m = S.fmode || 'board';
+  $$('#fMode button').forEach(b => b.setAttribute('aria-pressed', b.dataset.fm === m));
+  $$('#view-finder > .panel').forEach(pn => { if (pn.id !== 'boardPanel') pn.hidden = m === 'board'; });
+  $$('#boardPanel > :not(.bd-hd)').forEach(el => el.hidden = m !== 'board');
+  if (m === 'board') renderBoard();
+}
 function renderFinder(){
+  renderFinderMode(); if ((S.fmode || 'board') === 'board') return;
   const f = S.f;
   $('#fStats').innerHTML = Object.keys(STATS).map(k => `<button class="chip" data-k="${k}" aria-pressed="${f.stats.includes(k)}" title="${STATS[k].n}">${k}</button>`).join('');
   $('#fHit').value=f.hit; $('#fHitOut').textContent=f.hit+'%'; $('#fL30').value=f.l30; $('#fL30Out').textContent=f.l30+'%'; $('#fProb').value=f.prob; $('#fProbOut').textContent=f.prob+'%';
@@ -3048,6 +3142,10 @@ $('#fab').addEventListener('click', () => setTab('parlay'));
 $('#dataBtn').addEventListener('click', () => { renderRunReport(); const d=$('#drawer'); d.hidden=!d.hidden; $('#dataBtn').setAttribute('aria-expanded', !d.hidden); });
 $('#playerIn').addEventListener('change', e => { const v = e.target.value.trim().toLowerCase(); const p = S.players.find(x=>x.name.toLowerCase()===v) || S.players.find(x=>x.name.toLowerCase().includes(v)); if (p) selectPlayer(p.id); });
 ['#stratSel','#stratSel2','#fStrat'].forEach(id => $(id).addEventListener('change', e => { S.strat = e.target.value; lsSet(LSP+'strat', S.strat); renderAll(); toast(S.strat === 'all' ? 'Showing all props' : `Only props that fit “${stratOn().n}”`); }));
+$('#fMode').addEventListener('click', e => { const b = e.target.closest('[data-fm]'); if (!b) return; S.fmode = b.dataset.fm; lsSet(LSP+'fmode', S.fmode); renderFinder(); });
+$('#bStats').addEventListener('click', e => { const b = e.target.closest('[data-bs]'); if (!b) return; S.bstat = b.dataset.bs; renderBoard(); });
+$('#injScen').addEventListener('click', e => { const b = e.target.closest('[data-st]'); const g = e.target.closest('[data-scen]'); if (!b || !g) return; S.scenOpen = true; setInj(g.dataset.scen, b.dataset.st); setTimeout(() => { renderBoard(); }, 30); });
+$('#injScen').addEventListener('toggle', e => { if (e.target.matches('details.scen')) S.scenOpen = e.target.open; }, true);
 $('#stale').addEventListener('click', e => { const b = e.target.closest('[data-sadd]'); if (!b) return; toggleX(staleRows[+b.dataset.sadd]); renderStale(); renderSlipBadges(); });
 $('#gameChips').addEventListener('click', e => { const b = e.target.closest('[data-rg]'); if (!b) return; S.rgame = b.dataset.rg; renderRoster(); });
 $('#teamSel').addEventListener('change', e => { if (e.target.value) { S.rgame = e.target.value; renderRoster(); } });
