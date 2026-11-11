@@ -518,6 +518,14 @@ button.gc{border:0;cursor:pointer;font:inherit}
 .gres.w{background:var(--over);color:#002417} .gres.l{background:var(--under);color:#2a0006} .gres.p{background:var(--panel);color:var(--muted)}
 .grec{margin:4px 0 14px;padding:10px 12px;border-radius:12px;background:var(--panel2)}
 .grec table{width:100%}
+/* Injury impact */
+.impwrap{margin:8px 0 4px;background:var(--panel2);border-radius:12px;padding:8px 12px}
+.impwrap summary{cursor:pointer}
+.impact{border-left:4px solid var(--under);background:var(--panel2);border-radius:10px;padding:10px 12px;margin-top:8px}
+.impact.red{background:var(--under-soft)}
+.imp-h{font-size:14.5px}
+.outtag{display:inline-block;font-family:var(--cond);font-weight:800;font-size:13px;padding:1px 8px;border-radius:6px;background:var(--under);color:#2a0006;margin-right:4px;vertical-align:1px}
+.bump{display:block;font-size:12px;font-weight:700;color:var(--over);margin-top:2px}
 /* Odds board */
 .ben{background:var(--over-soft);border:1px solid rgba(46,229,157,.35);border-radius:12px;padding:10px 12px;margin:10px 0}
 .ben-h{font-size:14px;margin-bottom:6px}
@@ -791,6 +799,7 @@ details.inj{margin-top:22px!important}
       <p class="sub" id="todaySub" style="margin-bottom:6px"></p>
       <div class="chips" id="dayChips" style="margin-bottom:8px"></div>
       <div class="stratbar"><label class="f" for="stratSel" style="margin:0">Strategy</label><select class="ghost" id="stratSel"></select><span class="gpick" data-gpick></span><span class="meta" id="stratNote"></span></div>
+      <div id="injImpact"></div>
       <details class="fold">
         <summary>Pick settings</summary>
         <div class="set-grid">
@@ -849,6 +858,7 @@ details.inj{margin-top:22px!important}
       </div>
       <div class="player-name" id="pName">—</div>
       <div class="meta" id="pMeta"></div>
+      <div id="anInj"></div>
       <div class="teampick">
         <div class="tp-hd"><label class="f" style="margin:0">Browse a game or team</label><select class="ghost" id="stratSel2" aria-label="Only players who fit a strategy"></select><span class="gpick" data-gpick></span><select class="ghost" id="teamSel" aria-label="Pick a team"></select></div>
         <div class="chips gchips" id="gameChips"></div>
@@ -1821,6 +1831,7 @@ function renderRoster(){
 }
 function renderAnalyzer(){
   setTimeout(renderRoster, 0);
+  setTimeout(renderAnInj, 0);
   setTimeout(() => { renderStratSel(); renderStratFit(); }, 0);
   const p = S.byId[S.pid]; if (!p) return;
   $$('#statChips .chip').forEach(b => { b.setAttribute('aria-pressed', b.dataset.k===S.stat); b.classList.toggle('dim', !entries(p, b.dataset.k).length); b.title = entries(p, b.dataset.k).length ? STATS[b.dataset.k].n : `${STATS[b.dataset.k].n}: no book line`; });
@@ -2097,6 +2108,61 @@ function renderInjScen(){
 }
 // projection with only the injury report (no manual In/Out), to see what the manual changes did
 function projAuto(p, k, line){ const saved = S.outMan; S.outMan = {}; try { return evalProp(p, k, line, 'over').proj; } finally { S.outMan = saved; } }
+/* ---------- injury impact: who's out today and which teammates to bet ---------- */
+// projection with a given set of players forced back IN (to measure what their absence is worth)
+function projWith(p, k, line, backIn){
+  const saved = S.outMan; S.outMan = Object.assign({}, saved); backIn.forEach(id => S.outMan[id] = false);
+  try { return evalProp(p, k, line, 'over').proj; } finally { S.outMan = saved; }
+}
+const roleOK = p => NBA ? mean(p.games.slice(0, 10).map(g => g.min || 0)) >= 15 : p.games.length >= 3;
+function teamOuts(team){ return (TM[team] || []).filter(p => onDay(p) && isOut(p.id) && roleOK(p)); }
+// best bets for teammates who gain from these players being out
+function stepUps(team, outs, limit = 5){
+  const outIds = outs.map(o => o.id), list = [];
+  for (const t of (TM[team] || [])) {
+    if (isOut(t.id) || !onDay(t) || !t.lines) continue;
+    for (const k of PICK_STATS.main) {
+      const L = t.lines[k]; if (!L) continue;
+      const now = evalProp(t, k, L.line, 'over').proj, before = projWith(t, k, L.line, outIds), d = now - before;
+      if (!(d >= Math.max(.5, .05 * L.line))) continue;
+      const c = chooseLine(t, k, 'over', S.book); if (!c) continue;
+      const x = {p: t, k, side: 'over', line: c.line, odds: c.odds, book: true, bk: c.book, r: c.r, edge: c.edge, score: c.r.score, bump: d};
+      if (!sane(x) || x.edge < 0) continue;
+      list.push(x);
+    }
+  }
+  const best = {}; list.sort((a,b) => b.edge - a.edge).forEach(x => { if (!best[x.p.id]) best[x.p.id] = x; });   // one per teammate
+  return Object.values(best).sort((a,b) => b.edge - a.edge).slice(0, limit);
+}
+let impactRows = [], anRows = [];
+function impactCard(team, outs, rows, attr){
+  const ups = stepUps(team, outs);
+  const names = outs.map(o => `<b>${esc(o.name)}</b>${o.status ? ` <span class="meta">(${esc(o.status)})</span>` : ' <span class="meta">(set Out)</span>'}`).join(', ');
+  return `<div class="impact"><div class="imp-h"><span class="outtag">OUT</span> ${esc(team)}: ${names}</div>
+    ${ups.length ? `<div class="meta" style="margin:4px 0 6px">Teammates who step up, with a real over bet today:</div><div class="prows">${ups.map(x => propRow(x, false, rows, attr, true)).join('')}</div>`
+      : '<div class="meta" style="margin-top:4px">No teammate has a clear over bet from this yet.</div>'}</div>`;
+}
+function renderImpact(){
+  const el = $('#injImpact'); if (!el) return;
+  impactRows = [];
+  const teams = [...new Set(S.players.filter(p => onDay(p) && p.next).map(p => p.team))];
+  const hit = teams.map(t => [t, teamOuts(t)]).filter(([, o]) => o.length).slice(0, 8);
+  el.innerHTML = hit.length ? `<details class="impwrap" ${S.impOpen !== false ? 'open' : ''}><summary><b>🚑 Injury impact today</b> <span class="meta">${hit.length} team${hit.length===1?'':'s'} missing a regular. Who to bet instead.</span></summary>${hit.map(([t, o]) => impactCard(t, o, impactRows, 'impadd')).join('')}</details>` : '';
+}
+function renderAnInj(){
+  const el = $('#anInj'); if (!el) return; anRows = [];
+  const p = S.byId[S.pid]; if (!p || !p.next) { el.innerHTML = ''; return; }
+  if (isOut(p.id)) {
+    el.innerHTML = `<div class="impact red"><div class="imp-h"><span class="outtag">OUT</span> <b>${esc(p.name)}</b> is out${p.status ? ` (${esc(p.status)})` : ''}. Don\u2019t bet his props.</div></div>` + impactCard(p.team, [p], anRows, 'anadd').replace('<div class="impact">', '<div class="impact" style="margin-top:6px">');
+    return;
+  }
+  const outs = teamOuts(p.team);
+  if (!outs.length) { el.innerHTML = ''; return; }
+  const L = p.lines && p.lines[S.stat], line = L ? L.line : S.line;
+  const d = evalProp(p, S.stat, line, 'over').proj - projWith(p, S.stat, line, outs.map(o => o.id));
+  el.innerHTML = `<div class="impact"><div class="imp-h"><span class="outtag">OUT</span> Teammates out: ${outs.map(o => `<a href="#" class="plink" data-pcard="${esc(o.id)}">${esc(o.name)}</a>`).join(', ')}</div>
+    <div style="margin-top:4px">${Math.abs(d) >= .3 ? `His <b>${esc(S.stat)}</b> projection is <b class="${d > 0 ? 'pos' : 'neg'}">${d > 0 ? '+' : ''}${f1(d)}</b> because of it (from how he played without them).` : `It barely changes his <b>${esc(S.stat)}</b> projection.`}</div></div>`;
+}
 function renderBoard(){
   renderInjScen();
   const stats = PICK_STATS.all.filter(k => S.players.some(p => onDay(p) && p.lines && p.lines[k]));
@@ -2951,7 +3017,7 @@ function playerValue(list){ const good = list.filter(x => evOf(x) > 0).map(hitSc
 function propRow(x, best, arr = propRows, attr = 'xadd', showName = false){
   const i = arr.push(x) - 1, ev = evOf(x);
   return `<button class="prow ${showName?'named':''} ${best?'best':''} ${inSlipX(x)?'on':''}" data-${attr}="${i}"><span class="pk">${esc(x.k)}</span>
-    <span class="pick">${showName ? `<span class="pn">${esc(x.p.name)} <span class="meta">${esc(x.p.team)}${x.p.pos ? `, ${esc(x.p.pos)}` : ''}</span></span>` : ''}<b class="${x.side==='over'?'side-o':'side-u'}">${(() => { const g = gradeX(x), o = gradeRates()[g], n = o ? o.w + o.l : 0; return `<span class="gbadge g-${g}" title="Grade ${g}${n ? `: hit ${Math.round(o.w/n*100)}% of ${n} tracked ${S.strat && S.strat !== 'all' ? 'with this strategy' : 'leans'}` : ''}">${g}${n ? ` <small>${Math.round(o.w/n*100)}%</small>` : ''}</span>`; })()}${x.side==='over'?'Over':'Under'} ${x.line}${showName ? ` ${esc(x.k)}` : ''}</b><span class="meta">${esc(priceTxt(x))}, L10 ${x.r.L10.h}/${x.r.L10.h+x.r.L10.m}, score ${hs100(x)}</span>${histLine(x)}</span>
+    <span class="pick">${showName ? `<span class="pn">${esc(x.p.name)} <span class="meta">${esc(x.p.team)}${x.p.pos ? `, ${esc(x.p.pos)}` : ''}</span></span>` : ''}<b class="${x.side==='over'?'side-o':'side-u'}">${(() => { const g = gradeX(x), o = gradeRates()[g], n = o ? o.w + o.l : 0; return `<span class="gbadge g-${g}" title="Grade ${g}${n ? `: hit ${Math.round(o.w/n*100)}% of ${n} tracked ${S.strat && S.strat !== 'all' ? 'with this strategy' : 'leans'}` : ''}">${g}${n ? ` <small>${Math.round(o.w/n*100)}%</small>` : ''}</span>`; })()}${x.side==='over'?'Over':'Under'} ${x.line}${showName ? ` ${esc(x.k)}` : ''}</b><span class="meta">${esc(priceTxt(x))}, L10 ${x.r.L10.h}/${x.r.L10.h+x.r.L10.m}, score ${hs100(x)}</span>${x.bump ? `<span class="bump">\u25B2 his ${esc(x.k)} projection is up ${f1(x.bump)} with the teammate out</span>` : ''}${histLine(x)}</span>
     <span class="pc">${pct(x.r.prob)}</span><span class="ev ${ev>=0?'pos':'neg'}">${ev>=0?'+':''}${(ev*100).toFixed(0)}%</span></button>`;
 }
 function renderPlayerAndGames(){
@@ -3007,6 +3073,7 @@ function renderStreaks(pool){
 }
 function renderToday(){
   renderInjury();
+  setTimeout(renderImpact, 0);
   setTimeout(renderStale, 0);
   renderStratSel();
   // game-day chips: only players on the chosen day show anywhere
@@ -3393,6 +3460,9 @@ $('#gPrev').addEventListener('click', () => { const d = [...new Set(GAMES.map(g 
 $('#gNext').addEventListener('click', () => { const d = [...new Set(GAMES.map(g => g.game_date))].sort(), i = d.indexOf(S.gday); if (i >= 0 && i < d.length-1) { S.gday = d[i+1]; renderGames(); } });
 $('#gFilter').addEventListener('click', e => { const b = e.target.closest('[data-gf]'); if (!b) return; S.gf = b.dataset.gf; renderGames(); });
 $('#gamesFile').addEventListener('change', async e => { const f = e.target.files[0]; if (!f) return; try { const rows = parseCsv(await f.text()); if (!rows.length || !('home_team' in rows[0])) throw new Error('bad'); setGames(rows, true); toast(`Loaded ${rows.length} games from your game model${viewerIsOwner ? ', shared with your link' : ''}`); } catch(err){ toast('That file doesn\u2019t look like games_log.csv'); } e.target.value = ''; });
+$('#injImpact').addEventListener('click', e => { const b = e.target.closest('[data-impadd]'); if (b) { toggleX(impactRows[+b.dataset.impadd]); renderImpact(); renderSlipBadges(); } });
+$('#injImpact').addEventListener('toggle', e => { if (e.target.matches('details.impwrap')) S.impOpen = e.target.open; }, true);
+$('#anInj').addEventListener('click', e => { const b = e.target.closest('[data-anadd]'); if (b) { toggleX(anRows[+b.dataset.anadd]); renderAnInj(); renderSlipBadges(); } });
 $('#fMode').addEventListener('click', e => { const b = e.target.closest('[data-fm]'); if (!b) return; S.fmode = b.dataset.fm; lsSet(LSP+'fmode', S.fmode); renderFinder(); });
 $('#bStats').addEventListener('click', e => { const b = e.target.closest('[data-bs]'); if (!b) return; S.bstat = b.dataset.bs; renderBoard(); });
 $('#injScen').addEventListener('click', e => { const b = e.target.closest('[data-st]'); const g = e.target.closest('[data-scen]'); if (!b || !g) return; S.scenOpen = true; setInj(g.dataset.scen, b.dataset.st); setTimeout(() => { renderBoard(); }, 30); });
