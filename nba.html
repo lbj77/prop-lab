@@ -519,6 +519,13 @@ button.gc{border:0;cursor:pointer;font:inherit}
 .grec{margin:4px 0 14px;padding:10px 12px;border-radius:12px;background:var(--panel2)}
 .grec table{width:100%}
 /* Injury impact */
+.markout{margin:8px 0}
+.markout input{width:100%;font:inherit;font-size:15px;padding:9px 12px;border-radius:10px;border:1px solid var(--line);background:var(--panel);color:var(--ink)}
+.outhit{display:flex;flex-wrap:wrap;gap:4px 8px;align-items:center;width:100%;text-align:left;margin-top:6px;padding:8px 10px;border-radius:9px;border:1px solid var(--line);background:var(--panel);color:var(--ink);cursor:pointer;font:inherit}
+.outhit .oh-act{margin-left:auto;font-weight:800;font-size:12.5px;color:var(--under)}
+.outhit.on .oh-act{color:var(--over)}
+.chipx{font:inherit;font-size:12.5px;padding:2px 8px;border-radius:999px;border:1px solid var(--under);background:var(--under-soft);color:var(--ink);cursor:pointer}
+.markbtn{margin-top:8px;width:auto;font-size:13.5px}
 .impwrap{margin:8px 0 4px;background:var(--panel2);border-radius:12px;padding:8px 12px}
 .impwrap summary{cursor:pointer}
 .impact{border-left:4px solid var(--under);background:var(--panel2);border-radius:10px;padding:10px 12px;margin-top:8px}
@@ -1636,7 +1643,7 @@ function renderStale(){
       <span class="pp">${pct(x.fair)}</span><span class="pe pos">+${(x.edge*100).toFixed(1)}%</span></button>`; }).join('');
 }
 function entries(p, stat){ const L = p.lines && p.lines[stat]; if (!L || !L.books) return []; return Object.entries(L.books).filter(([b]) => !REF_BOOKS.has(baseBook(b))).map(([b,x]) => ({book:b, base:baseBook(b), line:x.line, over:x.over, under:x.under, dfs:DFS.has(b), alt:!!x.alt || isAlt(b)})); }
-function priceOf(e, side){ if (e.dfs && !e.alt) return decToAm(1/dfsBE(3)); const v = side==='over' ? e.over : e.under; return v && isFinite(v) ? v : null; }
+function priceOf(e, side){ if (e.s && !e.s.includes(side[0])) return null; if (e.dfs && !e.alt) return decToAm(1/dfsBE(3)); const v = side==='over' ? e.over : e.under; return v && isFinite(v) ? v : null; }
 // anytime-TD unders (0.5) are rarely offered and are a trap to rank: skip them
 const sideOK = (k, line, side) => NBA || !(k === 'TD' && side === 'under' && +line <= .5);
 function chooseLine(p, stat, side, book){
@@ -2147,21 +2154,42 @@ function renderImpact(){
   impactRows = [];
   const teams = [...new Set(S.players.filter(p => onDay(p) && p.next).map(p => p.team))];
   const hit = teams.map(t => [t, teamOuts(t)]).filter(([, o]) => o.length).slice(0, 8);
-  el.innerHTML = hit.length ? `<details class="impwrap" ${S.impOpen !== false ? 'open' : ''}><summary><b>🚑 Injury impact today</b> <span class="meta">${hit.length} team${hit.length===1?'':'s'} missing a regular. Who to bet instead.</span></summary>${hit.map(([t, o]) => impactCard(t, o, impactRows, 'impadd')).join('')}</details>` : '';
+  if (!teams.length) { el.innerHTML = ''; return; }
+  const manual = Object.keys(S.outMan || {}).filter(id => S.outMan[id] && S.byId[id]);
+  el.innerHTML = `<details class="impwrap" ${S.impOpen !== false ? 'open' : ''}><summary><b>🚑 Injury impact today</b> <span class="meta">${hit.length ? `${hit.length} team${hit.length===1?'':'s'} missing a regular. Who to bet instead.` : 'Nobody important is out yet.'}</span></summary>
+    <div class="markout"><input id="outSearch" type="search" autocomplete="off" placeholder="Heard news? Type a name to mark him out (e.g. Myles Turner)" value="${esc(S.outQ || '')}"><div id="outHits"></div>
+    ${manual.length ? `<div class="meta" style="margin-top:6px">You marked out: ${manual.map(id => `<button class="chipx" data-markout="${esc(id)}" title="Put back in">${esc(S.byId[id].name)} \u2715</button>`).join(' ')}</div>` : ''}</div>
+    ${hit.map(([t, o]) => impactCard(t, o, impactRows, 'impadd')).join('')}</details>`;
+  renderOutHits();
+}
+function renderOutHits(){
+  const box = $('#outHits'); if (!box) return;
+  const q = (S.outQ || '').trim().toLowerCase(); if (q.length < 2) { box.innerHTML = ''; return; }
+  const hits = S.players.filter(p => onDay(p) && p.next && p.name.toLowerCase().includes(q)).slice(0, 6);
+  box.innerHTML = hits.length ? hits.map(p => `<button class="outhit ${isOut(p.id) ? 'on' : ''}" data-markout="${esc(p.id)}"><b>${esc(p.name)}</b> <span class="meta">${esc(p.team)} ${p.next.home ? 'vs' : '@'} ${esc(p.next.opp)}${p.status ? `, ${esc(p.status)}` : ''}</span><span class="oh-act">${isOut(p.id) ? 'Out \u2713 (tap to put back)' : 'Mark out'}</span></button>`).join('')
+    : '<div class="meta" style="padding:6px 2px">No one playing on this day matches that.</div>';
+}
+function markOut(id){
+  const p = S.byId[id]; if (!p) return;
+  if (isOut(id)) { setInj(id, S.outMan && S.outMan[id] === true ? 'auto' : 'in'); toast(`${p.name} back in`); }
+  else { setInj(id, 'out'); toast(`${p.name} marked out. Teammates re-projected.`); }
+  renderAll();
+  setTimeout(() => { const i = $('#outSearch'); if (i && S.tab === 'today') { i.value = ''; } }, 0);
 }
 function renderAnInj(){
   const el = $('#anInj'); if (!el) return; anRows = [];
   const p = S.byId[S.pid]; if (!p || !p.next) { el.innerHTML = ''; return; }
   if (isOut(p.id)) {
-    el.innerHTML = `<div class="impact red"><div class="imp-h"><span class="outtag">OUT</span> <b>${esc(p.name)}</b> is out${p.status ? ` (${esc(p.status)})` : ''}. Don\u2019t bet his props.</div></div>` + impactCard(p.team, [p], anRows, 'anadd').replace('<div class="impact">', '<div class="impact" style="margin-top:6px">');
+    el.innerHTML = `<div class="impact red"><div class="imp-h"><span class="outtag">OUT</span> <b>${esc(p.name)}</b> is out${p.status ? ` (${esc(p.status)})` : ' (you marked him)'}. Don\u2019t bet his props.</div><button class="ghost markbtn" data-markout="${esc(p.id)}">He\u2019s playing after all? Put him back in</button></div>` + impactCard(p.team, [p], anRows, 'anadd').replace('<div class="impact">', '<div class="impact" style="margin-top:6px">');
     return;
   }
   const outs = teamOuts(p.team);
-  if (!outs.length) { el.innerHTML = ''; return; }
+  const btn = `<button class="ghost markbtn" data-markout="${esc(p.id)}">Heard he\u2019s out? Mark ${esc(p.name.split(' ').slice(-1)[0])} out tonight</button>`;
+  if (!outs.length) { el.innerHTML = btn; return; }
   const L = p.lines && p.lines[S.stat], line = L ? L.line : S.line;
   const d = evalProp(p, S.stat, line, 'over').proj - projWith(p, S.stat, line, outs.map(o => o.id));
   el.innerHTML = `<div class="impact"><div class="imp-h"><span class="outtag">OUT</span> Teammates out: ${outs.map(o => `<a href="#" class="plink" data-pcard="${esc(o.id)}">${esc(o.name)}</a>`).join(', ')}</div>
-    <div style="margin-top:4px">${Math.abs(d) >= .3 ? `His <b>${esc(S.stat)}</b> projection is <b class="${d > 0 ? 'pos' : 'neg'}">${d > 0 ? '+' : ''}${f1(d)}</b> because of it (from how he played without them).` : `It barely changes his <b>${esc(S.stat)}</b> projection.`}</div></div>`;
+    <div style="margin-top:4px">${Math.abs(d) >= .3 ? `His <b>${esc(S.stat)}</b> projection is <b class="${d > 0 ? 'pos' : 'neg'}">${d > 0 ? '+' : ''}${f1(d)}</b> because of it (from how he played without them).` : `It barely changes his <b>${esc(S.stat)}</b> projection.`}</div></div>${btn}`;
 }
 function renderBoard(){
   renderInjScen();
@@ -2180,6 +2208,7 @@ function renderBoard(){
       const e = L.books[key], dfs = DFS.has(b), line = +e.line, sides = {};
       for (const side of ['over','under']) {
         if (!sideOK(k, line, side)) continue;
+        if (e.s && !e.s.includes(side[0])) continue;   // this app doesn't offer that side right now
         const price = dfs ? decToAm(1/dfsBE(3)) : +(side === 'over' ? e.over : e.under);
         if (!price || !isFinite(price)) continue;
         sides[side] = {price, edge: pr(line, side) - implied(price), dfs};
@@ -3460,6 +3489,9 @@ $('#gPrev').addEventListener('click', () => { const d = [...new Set(GAMES.map(g 
 $('#gNext').addEventListener('click', () => { const d = [...new Set(GAMES.map(g => g.game_date))].sort(), i = d.indexOf(S.gday); if (i >= 0 && i < d.length-1) { S.gday = d[i+1]; renderGames(); } });
 $('#gFilter').addEventListener('click', e => { const b = e.target.closest('[data-gf]'); if (!b) return; S.gf = b.dataset.gf; renderGames(); });
 $('#gamesFile').addEventListener('change', async e => { const f = e.target.files[0]; if (!f) return; try { const rows = parseCsv(await f.text()); if (!rows.length || !('home_team' in rows[0])) throw new Error('bad'); setGames(rows, true); toast(`Loaded ${rows.length} games from your game model${viewerIsOwner ? ', shared with your link' : ''}`); } catch(err){ toast('That file doesn\u2019t look like games_log.csv'); } e.target.value = ''; });
+$('#injImpact').addEventListener('input', e => { if (e.target.id === 'outSearch') { S.outQ = e.target.value; renderOutHits(); } });
+$('#injImpact').addEventListener('click', e => { const m = e.target.closest('[data-markout]'); if (m) { S.outQ = ''; markOut(m.dataset.markout); } });
+$('#anInj').addEventListener('click', e => { const m = e.target.closest('[data-markout]'); if (m) markOut(m.dataset.markout); });
 $('#injImpact').addEventListener('click', e => { const b = e.target.closest('[data-impadd]'); if (b) { toggleX(impactRows[+b.dataset.impadd]); renderImpact(); renderSlipBadges(); } });
 $('#injImpact').addEventListener('toggle', e => { if (e.target.matches('details.impwrap')) S.impOpen = e.target.open; }, true);
 $('#anInj').addEventListener('click', e => { const b = e.target.closest('[data-anadd]'); if (b) { toggleX(anRows[+b.dataset.anadd]); renderAnInj(); renderSlipBadges(); } });
