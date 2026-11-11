@@ -54,6 +54,18 @@ td.r,th.r{text-align:right}
 .seg button{font:inherit;font-weight:700;font-size:14px;border:0;background:none;color:var(--muted);padding:6px 12px;border-radius:8px;cursor:pointer}
 .seg button[aria-pressed="true"]{background:var(--ball);color:#001A22}
 .empty{color:var(--muted);padding:12px 0}
+.h3{font-family:var(--cond);font-size:19px;margin:16px 0 6px}
+.bar{position:relative;height:20px;min-width:90px;border-radius:6px;background:var(--panel2);overflow:hidden}
+.bar i{position:absolute;inset:0 auto 0 0;background:var(--over-soft);border-right:2px solid var(--over)}
+.bar span{position:relative;padding:1px 7px;font-weight:700;font-size:12.5px}
+.how{font-size:12px;color:var(--muted);white-space:nowrap}
+.how b{color:var(--ink)}
+.fq{width:100%;max-width:420px;font:inherit;font-size:16px;padding:10px 12px;border-radius:10px;border:1px solid var(--line);background:var(--panel2);color:var(--ink)}
+.fc{background:var(--panel2);border-radius:12px;padding:10px 12px;margin-top:8px}
+.fc .nm{font-weight:700;font-size:16px}
+.stag{display:inline-block;font-size:11.5px;font-weight:800;padding:1px 8px;border-radius:999px;margin-right:4px;background:var(--panel);color:var(--muted)}
+.stag.Striker{background:rgba(255,92,122,.16);color:var(--under)} .stag.Grappler{background:rgba(61,220,255,.14);color:var(--ball)} .stag.Decision{background:rgba(255,194,75,.15);color:var(--warn)} .stag.warn{background:rgba(255,194,75,.12);color:var(--warn)}
+.sty{grid-column:1 / -1;display:grid;gap:4px;font-size:12.5px;color:var(--muted)}
 #gate{position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;padding:24px;background:#05070A}
 #gate[hidden]{display:none}
 #gate .gbox{max-width:380px;width:100%;text-align:center;background:#0E1116;border:1px solid #232a35;border-radius:18px;padding:28px 22px}
@@ -88,6 +100,20 @@ td.r,th.r{text-align:right}
     <div id="tune" class="meta" style="margin-top:12px"></div>
   </div>
   <div class="panel">
+    <h2>Style lab</h2>
+    <p class="sub">Every UFC fight on file, with each fighter judged on how they'd been winning <b>before</b> that fight: <b>Striker</b> (mostly KO/TKO wins), <b>Grappler</b> (mostly submissions), <b>Decision</b> (mostly wins on the cards). Then: who actually won, and how.</p>
+    <div id="styleInfo" class="meta"></div>
+    <h3 class="h3">Angles: how often the fighter with this edge wins</h3>
+    <div style="overflow-x:auto"><table id="angles"></table></div>
+    <h3 class="h3">How fights end, by style matchup</h3>
+    <div style="overflow-x:auto"><table id="pairs"></table></div>
+    <h3 class="h3">How fights end, by weight class</h3>
+    <div style="overflow-x:auto"><table id="wcs"></table></div>
+    <h3 class="h3">Look up a fighter</h3>
+    <input id="fq" class="fq" type="search" placeholder="Type a name, e.g. Volkanovski" autocomplete="off">
+    <div id="fres"></div>
+  </div>
+  <div class="panel">
     <h2>Past cards</h2>
     <div class="seg" id="tierFilter"><button data-t="all" aria-pressed="true">All picks</button><button data-t="bet">Recommended</button><button data-t="review">Review only</button></div>
     <div id="past"></div>
@@ -102,7 +128,30 @@ const tierInfo = t => TIERS.find(x => x[0] === t) || [t, 'REVIEW', String(t || '
 const am = n => n == null || !isFinite(+n) ? '\u2014' : (+n > 0 ? '+' : '') + Math.round(+n);
 const pct = v => v == null || !isFinite(+v) ? '\u2014' : Math.round(+v * 100) + '%';
 const fmtDate = d => { const x = new Date(d + 'T12:00:00'); return isNaN(x) ? d : x.toLocaleDateString([], {weekday:'short', month:'short', day:'numeric'}); };
-let PICKS = [], tierView = 'all', MODEL = null;
+let PICKS = [], tierView = 'all', MODEL = null, STY = null;
+const pctx = v => v == null ? '\u2014' : Math.round(v*100) + '%';
+function fighterLine(name){
+  const f = STY && STY.fighters && STY.fighters[name]; if (!f) return '';
+  const [k, sb, d] = f.w, [lk, ls, ld] = f.l;
+  return `<div><span class="stag ${esc(f.style)}">${esc(f.style)}</span>${f.tags.map(t => `<span class="stag warn">${esc(t)}</span>`).join('')}<b style="color:var(--ink)">${esc(name)}</b> ${esc(f.rec)} in the UFC: wins ${k} KO, ${sb} sub, ${d} dec; losses ${lk} KO, ${ls} sub, ${ld} dec</div>`;
+}
+function renderStyles(){
+  if (!STY) { $('#styleInfo').textContent = 'Loading\u2026 (appears after your next UFC upload)'; return; }
+  $('#styleInfo').textContent = `${STY.fights.toLocaleString()} fights, ${Object.keys(STY.fighters).length} active fighters, updated ${STY.built}. Win rates over 52% are green; 48% or lower red.`;
+  const how = h => `<span class="how">KO <b>${pctx(h.KO)}</b>, Sub <b>${pctx(h.SUB)}</b>, Dec <b>${pctx(h.DEC)}</b></span>`;
+  const rows = STY.strategies.filter(x => x.n >= 50).sort((a,b) => b.rate - a.rate);
+  $('#angles').innerHTML = `<thead><tr><th>Angle</th><th class="r">Fights</th><th>Wins, and how</th></tr></thead><tbody>${rows.map(x => `<tr><td><b>${esc(x.name)}</b><div class="meta" style="font-size:12px">${esc(x.desc)}</div></td><td class="r">${x.n}</td>
+    <td><div class="bar"><i style="width:${Math.round(x.rate*100)}%"></i><span class="${x.rate > .52 ? 'pos' : x.rate <= .48 ? 'neg' : ''}">${pctx(x.rate)}</span></div><div style="margin-top:3px">${how(x.how)}</div></td></tr>`).join('')}</tbody>`;
+  $('#pairs').innerHTML = `<thead><tr><th>Matchup</th><th class="r">Fights</th><th class="r">KO/TKO</th><th class="r">Submission</th><th class="r">Decision</th></tr></thead><tbody>${STY.matchups.filter(m => !/New/.test(m.pair)).map(m => `<tr><td><b>${esc(m.pair)}</b></td><td class="r">${m.n}</td><td class="r">${pctx(m.KO)}</td><td class="r">${pctx(m.SUB)}</td><td class="r">${pctx(m.DEC)}</td></tr>`).join('')}</tbody>`;
+  $('#wcs').innerHTML = `<thead><tr><th>Weight class</th><th class="r">Fights</th><th class="r">KO/TKO</th><th class="r">Submission</th><th class="r">Decision</th></tr></thead><tbody>${STY.weight_classes.map(m => `<tr><td><b>${esc(m.wc)}</b></td><td class="r">${m.n}</td><td class="r">${pctx(m.KO)}</td><td class="r">${pctx(m.SUB)}</td><td class="r">${pctx(m.DEC)}</td></tr>`).join('')}</tbody>`;
+  findFighters();
+}
+function findFighters(){
+  const q = ($('#fq').value || '').trim().toLowerCase(); if (!STY || q.length < 2) { $('#fres').innerHTML = ''; return; }
+  const hits = Object.keys(STY.fighters).filter(n => n.toLowerCase().includes(q)).slice(0, 8);
+  $('#fres').innerHTML = hits.length ? hits.map(n => { const f = STY.fighters[n];
+    return `<div class="fc">${fighterLine(n)}<div class="meta" style="margin-top:4px">${esc(f.wc || '')}, rating ${f.elo}, ${f.streak > 0 ? `${f.streak}-fight win streak` : f.streak < 0 ? `lost last ${-f.streak}` : ''}, last fought ${esc(f.last || '\u2014')}</div></div>`; }).join('') : '<div class="empty">No active fighter matches that.</div>';
+}
 /* ---------- UFC AI ---------- */
 const LIMIT = 300;                                     // longshot limit (same rule as the model)
 const dec = ml => +ml > 0 ? 1 + +ml/100 : 1 + 100/Math.abs(+ml);
@@ -156,6 +205,7 @@ function tally(list){
 const rec = t => `${t.w}\u2013${t.l}${t.p ? `\u2013${t.p}` : ''}`;
 function render(){
   try { trainAI(); } catch(e){}
+  renderStyles();
   renderAI();
   const pending = PICKS.filter(r => r.status === 'pending'), graded = PICKS.filter(r => r.status === 'graded');
   // upcoming card(s)
@@ -190,8 +240,10 @@ function card(r){
   const model = r.blended_prob != null ? r.blended_prob : r.model_prob;
   return `<div class="pk ${cls}"><div class="who"><span class="tier ${cls}">${esc(label)}</span>${esc(r.fighter)} <small>vs ${esc(r.opponent)}</small>${res ? `<span class="res ${res}">${res === 'win' ? 'W' : res === 'loss' ? 'L' : (r.result || '').toUpperCase()}</span>` : ''}</div>
     <div class="odds">${esc(am(r.moneyline))}</div>
+    ${STY ? `<div class="sty">${fighterLine(r.fighter)}${fighterLine(r.opponent)}</div>` : ''}
     <div class="row2">${(() => { const c = aiChance(r); if (c == null) return ''; const v = c*dec(r.moneyline) - 1; return `<span style="font-weight:700;color:${v > 0 ? 'var(--over)' : 'var(--under)'}">AI ${Math.round(c*100)}%, ${v >= 0 ? '+' : ''}${(v*100).toFixed(0)}% value</span>`; })()}${blocked(r) ? '<span style="color:var(--warn);font-weight:700">Longshot limit: pass</span>' : ''}<span>Model ${pct(model)}</span><span>Market ${pct(r.market_fair_prob)}</span><span class="${(r.edge||0) >= 0 ? 'pos' : 'neg'}">Edge ${r.edge != null ? ((r.edge >= 0 ? '+' : '') + (r.edge * 100).toFixed(1) + '%') : '\u2014'}</span>${r.bookmaker ? `<span>${esc(r.bookmaker)}</span>` : ''}${res ? `<span class="${(+r.units||0) >= 0 ? 'pos' : 'neg'}">${(+r.units||0) >= 0 ? '+' : ''}${(+r.units||0).toFixed(2)}u</span>` : ''}</div></div>`;
 }
+document.querySelector('#fq').addEventListener('input', findFighters);
 document.querySelector('#tierFilter').addEventListener('click', e => { const b = e.target.closest('[data-t]'); if (!b) return; tierView = b.dataset.t; document.querySelectorAll('#tierFilter button').forEach(x => x.setAttribute('aria-pressed', x === b)); render(); });
 async function ungz(b64){ const bin = Uint8Array.from(atob(b64), c => c.charCodeAt(0)); const ds = new Blob([bin]).stream().pipeThrough(new DecompressionStream('gzip')); return await new Response(ds).text(); }
 (function(){
@@ -210,7 +262,8 @@ async function ungz(b64){ const bin = Uint8Array.from(atob(b64), c => c.charCode
     gate('');
     const load = async () => { try { const s = await fs.doc('sports/ufc/public/picks').get(); if (!s.exists) { if (!PICKS.length) $('#upcoming').innerHTML = '<div class="empty">No UFC data yet. Run the UFC upload on your PC.</div>'; return; }
       const m = s.data(); PICKS = JSON.parse(m.gz ? await ungz(m.s) : m.s); localStorage.setItem('ufclab:picks', JSON.stringify(PICKS)); render(); } catch(e){} };
-    const loadModel = async () => { try { const s = await fs.doc('sports/ufc/public/model').get(); if (s.exists) { MODEL = s.data(); renderAI(); } } catch(e){} };
+    const loadModel = async () => { try { const s = await fs.doc('sports/ufc/public/model').get(); if (s.exists) { MODEL = s.data(); renderAI(); } } catch(e){}
+      try { const s = await fs.doc('sports/ufc/public/styles').get(); if (s.exists) { const m = s.data(); STY = JSON.parse(m.gz ? await ungz(m.s) : m.s); render(); } } catch(e){} };
     load(); loadModel(); setInterval(() => { load(); loadModel(); }, 120000);
   });
 })();
