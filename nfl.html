@@ -517,6 +517,8 @@ tr.bd-out td{opacity:.45}
 .seg-sm button{padding:4px 10px;font-size:13px}
 .scen-pct{text-align:center;font-family:var(--cond);font-weight:800;font-size:18px;line-height:1}
 .scen-pct small{display:block;font-family:var(--body);font-weight:500;font-size:10.5px;color:var(--muted)}
+.hist{display:block;font-size:12px;color:var(--muted);margin-top:2px}
+.hist b{font-weight:800}
 /* Strategy filter */
 .stratbar{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;margin:4px 0 8px}
 .stratbar select{max-width:100%}
@@ -1680,6 +1682,28 @@ function bookFor(p, stat){
 const usesStat = (p, k) => mean(p.games.slice(0,10).map(g => statVal(g,k))) >= (k==='TD' ? .3 : 1);
 function estLine(p, stat){ const v = p.games.slice(0,10).map(g=>statVal(g,stat)); const m = mean(v); return isFinite(m) ? Math.max(0.5, Math.floor(m)+.5) : 0.5; }
 let GRATE = {key:'', v:{}};
+// how past picks with a similar edge and a similar model chance actually did (from the Strategy lab)
+const EDGE_B = [[-1, 0, 'under 0%'], [0, .03, '0 to 3%'], [.03, .06, '3 to 6%'], [.06, .10, '6 to 10%'], [.10, 1, '10%+']];
+const PROB_B = [[0, .55, 'under 55%'], [.55, .60, '55 to 60%'], [.60, .65, '60 to 65%'], [.65, .70, '65 to 70%'], [.70, 1, '70%+']];
+let BRATE = {key: '', e: null, p: null};
+function bucketRates(){
+  const key = typeof labDocs !== 'undefined' ? labDocs.length + ':' + labDocs.reduce((m,d) => m + (d.res||'').replace(/\./g,'').length, 0) : '0';
+  if (BRATE.key === key) return BRATE;
+  const e = EDGE_B.map(() => ({w:0, l:0})), pr = PROB_B.map(() => ({w:0, l:0}));
+  try { labDocs.forEach(doc => doc.rows.forEach((row, i) => { const r = doc.res && doc.res[i]; if (r !== 'h' && r !== 'm') return;
+    const f = row.split('|'), prob = +f[7], odds = +f[5]; if (!isFinite(prob) || !f[7] || !isFinite(odds)) return;
+    const ed = prob - implied(odds), ei = EDGE_B.findIndex(b => ed >= b[0] && ed < b[1]), pi = PROB_B.findIndex(b => prob >= b[0] && prob < b[1]);
+    if (ei >= 0) r === 'h' ? e[ei].w++ : e[ei].l++; if (pi >= 0) r === 'h' ? pr[pi].w++ : pr[pi].l++; })); } catch(err){}
+  BRATE = {key, e, p: pr}; return BRATE;
+}
+function histLine(x){
+  if (!x || !x.r || x.r.probRaw == null || !isFinite(x.odds)) return '';
+  const B = bucketRates(); if (!B.e) return '';
+  const ed = x.r.probRaw - implied(x.odds), ei = EDGE_B.findIndex(b => ed >= b[0] && ed < b[1]), pi = PROB_B.findIndex(b => x.r.probRaw >= b[0] && x.r.probRaw < b[1]);
+  const part = (lab, o) => { const n = o.w + o.l; if (n < 20) return ''; const wp = o.w/n; return `${lab} hit <b class="${wp >= .55 ? 'pos' : wp < .5 ? 'neg' : ''}">${Math.round(wp*100)}%</b> (${n})`; };
+  const a = ei >= 0 ? part(`edge ${EDGE_B[ei][2]}`, B.e[ei]) : '', b = pi >= 0 ? part(`model ${PROB_B[pi][2]}`, B.p[pi]) : '';
+  return a || b ? `<span class="hist">Past picks like this: ${[a, b].filter(Boolean).join(', ')}</span>` : '';
+}
 function gradeRates(){
   const key = (S.strat||'all') + '|' + (typeof labDocs !== 'undefined' ? labDocs.length + ':' + labDocs.reduce((m,d) => m + (d.res||'').replace(/\./g,'').length, 0) : 0);
   if (GRATE.key === key) return GRATE.v;
@@ -2877,7 +2901,7 @@ function playerValue(list){ const good = list.filter(x => evOf(x) > 0).map(hitSc
 function propRow(x, best, arr = propRows, attr = 'xadd', showName = false){
   const i = arr.push(x) - 1, ev = evOf(x);
   return `<button class="prow ${showName?'named':''} ${best?'best':''} ${inSlipX(x)?'on':''}" data-${attr}="${i}"><span class="pk">${esc(x.k)}</span>
-    <span class="pick">${showName ? `<span class="pn">${esc(x.p.name)} <span class="meta">${esc(x.p.team)}${x.p.pos ? `, ${esc(x.p.pos)}` : ''}</span></span>` : ''}<b class="${x.side==='over'?'side-o':'side-u'}">${(() => { const g = gradeX(x), o = gradeRates()[g], n = o ? o.w + o.l : 0; return `<span class="gbadge g-${g}" title="Grade ${g}${n ? `: hit ${Math.round(o.w/n*100)}% of ${n} tracked ${S.strat && S.strat !== 'all' ? 'with this strategy' : 'leans'}` : ''}">${g}${n ? ` <small>${Math.round(o.w/n*100)}%</small>` : ''}</span>`; })()}${x.side==='over'?'Over':'Under'} ${x.line}${showName ? ` ${esc(x.k)}` : ''}</b><span class="meta">${esc(priceTxt(x))}, L10 ${x.r.L10.h}/${x.r.L10.h+x.r.L10.m}, score ${hs100(x)}</span></span>
+    <span class="pick">${showName ? `<span class="pn">${esc(x.p.name)} <span class="meta">${esc(x.p.team)}${x.p.pos ? `, ${esc(x.p.pos)}` : ''}</span></span>` : ''}<b class="${x.side==='over'?'side-o':'side-u'}">${(() => { const g = gradeX(x), o = gradeRates()[g], n = o ? o.w + o.l : 0; return `<span class="gbadge g-${g}" title="Grade ${g}${n ? `: hit ${Math.round(o.w/n*100)}% of ${n} tracked ${S.strat && S.strat !== 'all' ? 'with this strategy' : 'leans'}` : ''}">${g}${n ? ` <small>${Math.round(o.w/n*100)}%</small>` : ''}</span>`; })()}${x.side==='over'?'Over':'Under'} ${x.line}${showName ? ` ${esc(x.k)}` : ''}</b><span class="meta">${esc(priceTxt(x))}, L10 ${x.r.L10.h}/${x.r.L10.h+x.r.L10.m}, score ${hs100(x)}</span>${histLine(x)}</span>
     <span class="pc">${pct(x.r.prob)}</span><span class="ev ${ev>=0?'pos':'neg'}">${ev>=0?'+':''}${(ev*100).toFixed(0)}%</span></button>`;
 }
 function renderPlayerAndGames(){
