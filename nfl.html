@@ -614,6 +614,15 @@ details.alerts summary{cursor:pointer;font-size:18px}
 .al.moved{border-left-color:var(--push);opacity:.85}
 .al-rest{margin-top:12px}
 .al-rest summary{cursor:pointer;font-weight:700}
+.al-filters{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}
+.al-filters label.f2{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--muted)}
+.al-filters select{width:100%}
+.al-filters .full{grid-column:1/-1}
+.al-filters .chk{display:flex;gap:8px;align-items:center;font-size:15px;color:var(--ink)}
+.al-filters .chk input{width:20px;height:20px}
+#alSound[aria-pressed="true"]{background:var(--ball);color:var(--on-accent);border-color:var(--ball)}
+@media(max-width:560px){.al-filters{grid-template-columns:1fr}}
+
 
 
 
@@ -871,6 +880,16 @@ details.inj{margin-top:22px!important}
       <h2>Alerts</h2>
       <p class="sub" id="alSub">Every sharp line move from the last hour. Proven-strategy moves come first. Alerts disappear after an hour so the list stays fresh.</p>
       <div class="seg" id="alFilter"><button data-alf="all">All</button><button data-alf="top">Proven</button><button data-alf="other">Other moves</button><button data-alf="pulled">Pulled</button></div>
+      <details class="fold" style="margin-top:12px" id="alFold"><summary>Filters and sound</summary>
+      <div class="al-filters">
+        <label class="f2 full">Strategy or combo<select class="ghost" id="alStrat"></select></label>
+        <div class="full"><div class="seg" id="alSide"><button data-v="both">Overs and unders</button><button data-v="over">Overs</button><button data-v="under">Unders</button></div></div>
+        <label class="f2">Stat<select class="ghost" id="alStat"></select></label>
+        <label class="f2">Strategy wins at least<select class="ghost" id="alMin"><option value="0">Any</option><option value="55">55%</option><option value="58">58%</option><option value="60">60%</option><option value="65">65%</option></select></label>
+        <label class="chk full"><input type="checkbox" id="alMine"> <span id="alMineL">Only alerts my app still has</span></label>
+        <div class="full" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><button class="ghost" id="alSound" style="width:auto">🔕 Sound off</button><button class="ghost" id="alTest" style="width:auto">Test sound</button><button class="ghost" id="alReset" style="width:auto">Clear filters</button></div>
+        <p class="meta full" style="margin:0">Filters also decide which alerts show on Today, pop up, buzz and play the sound. Sound works while the app is open on your screen.</p>
+      </div></details>
     </div>
     <div id="alertList"></div>
   </section>
@@ -3205,6 +3224,90 @@ function renderToday(){
 
 
 
+/* ---------- every strategy, pair, trio and "N agree" with its record (for alerts and Best bets) ---------- */
+let CREC = {key:'', v:{}};
+const COMBO_N = 100, COMBO_ROI = .05;       // combos are smaller samples, so they must clear a higher bar
+function comboRecords(){
+  const key = labDocs.length + ':' + labDocs.reduce((m,d) => m + (d.res||'').replace(/\./g,'').length, 0);
+  if (CREC.key === key) return CREC.v;
+  const base = BASE_STRATS().map(st => st.id), v = {};
+  const add = (id, win, pl) => { const o = v[id] || (v[id] = {w:0, l:0, prof:0}); win ? o.w++ : o.l++; o.prof += pl; };
+  labDocs.forEach(doc => doc.rows.forEach((row, i) => { const r = doc.res && doc.res[i]; if (r !== 'h' && r !== 'm') return;
+    const f = row.split('|'), odds = +f[5], fs = new Set((f[6] || '').split(',')), win = r === 'h', pl = win ? (isFinite(odds) && odds ? amToDec(odds) - 1 : .87) : -1;
+    const on = base.filter(id => fs.has(id));
+    for (let a = 0; a < on.length; a++) for (let b = a+1; b < on.length; b++) { add('combo:'+on[a]+'+'+on[b], win, pl); for (let c = b+1; c < on.length; c++) add('combo:'+on[a]+'+'+on[b]+'+'+on[c], win, pl); }
+    for (let k = 2; k <= Math.min(on.length, 4); k++) add('conf:'+k, win, pl);
+  }));
+  Object.values(v).forEach(o => { o.n = o.w + o.l; o.wp = o.n ? o.w/o.n : 0; o.roi = o.n ? o.prof/o.n : 0; });
+  CREC = {key, v}; return v;
+}
+const comboProven = rec => rec.n >= COMBO_N && rec.roi >= COMBO_ROI;
+// every tracked strategy, combination and "N agree" this prop fits; proven ones first, best return first
+function fitsAll(x){
+  const R = stratRecords(), C = comboRecords(), base = BASE_STRATS().filter(st => st.t(x)).map(st => st.id), out = [];
+  LAB.forEach(st => { if (st.t && st.id !== 'all' && st.t(x) && R[st.id]) out.push({id: st.id, n: st.n, rec: R[st.id], combo: false}); });
+  const push = id => { if (C[id]) out.push({id, n: stratById(id).n, rec: C[id], combo: true}); };
+  for (let a = 0; a < base.length; a++) for (let b = a+1; b < base.length; b++) { push('combo:'+base[a]+'+'+base[b]); for (let c = b+1; c < base.length; c++) push('combo:'+base[a]+'+'+base[b]+'+'+base[c]); }
+  for (let k = 2; k <= Math.min(base.length, 4); k++) push('conf:'+k);
+  out.forEach(o => o.proven = o.combo ? comboProven(o.rec) : isProven(o.rec));
+  const sc = o => o.rec.roi * o.rec.n / (o.rec.n + 200);   // small samples count for less
+  return out.sort((a,b) => b.proven - a.proven || sc(b) - sc(a));
+}
+function whyFor(id, x){
+  if (id.startsWith('combo:')) { const parts = id.slice(6).split('+').map(i => whyText(i, x)); return parts.slice(0, 2).join(', and ') + (parts.length > 2 ? ', and more' : ''); }
+  if (id.startsWith('conf:')) return `${confCount(x)} of our strategies agree`;
+  return whyText(id, x);
+}
+function provenList(){
+  const R = stratRecords(), C = comboRecords(), out = [];
+  LAB.forEach(st => { if (st.t && st.id !== 'all' && R[st.id] && isProven(R[st.id])) out.push({id: st.id, n: st.n, rec: R[st.id]}); });
+  Object.entries(C).forEach(([id, rec]) => { if (comboProven(rec)) out.push({id, n: stratById(id).n, rec}); });
+  const sc = o => o.rec.roi * o.rec.n / (o.rec.n + 200);
+  return out.sort((a,b) => sc(b) - sc(a));
+}
+/* alert filters and sound */
+S.alF = Object.assign({strat:'any', side:'both', stat:'all', minWin:0, mine:false}, lsGet(LSP+'alF') || {});
+S.alSound = !!lsGet(LSP+'alSound');
+let AC = null;
+function audio(){ try { if (!AC) AC = new (window.AudioContext || window.webkitAudioContext)(); if (AC.state === 'suspended') AC.resume(); } catch(e){} return AC; }
+function chime(){
+  const ac = audio(); if (!ac) return;
+  try { const t = ac.currentTime + .02;
+    [880, 1175, 1568].forEach((f, i) => { const o = ac.createOscillator(), g = ac.createGain(), s = t + i*.16;
+      o.type = 'sine'; o.frequency.value = f; g.gain.setValueAtTime(.0001, s); g.gain.exponentialRampToValueAtTime(.4, s + .02); g.gain.exponentialRampToValueAtTime(.0001, s + .45);
+      o.connect(g); g.connect(ac.destination); o.start(s); o.stop(s + .5); }); } catch(e){}
+}
+// phones only allow sound after a tap, so wake the audio on the first tap if sound is on
+document.addEventListener('pointerdown', () => { if (S.alSound) audio(); }, {passive: true});
+function alertPass(o){
+  const F = S.alF, a = o.a;
+  if (a.kind === 'pulled') return F.strat === 'any' && F.minWin === 0;
+  if (F.side !== 'both' && a.side && a.side !== F.side) return false;
+  if (F.stat !== 'all' && a.stat !== F.stat) return false;
+  if (F.mine && S.book !== 'any') { const nm = bookName(S.book).toLowerCase(), b = baseBook(S.book).toLowerCase();
+    if (!(a.where || []).some(w => { const l = String(w).toLowerCase(); return l.includes(nm) || l.includes(b); })) return false; }
+  if (F.strat !== 'any' && !(o.ev && o.ev.allIds && o.ev.allIds.includes(F.strat))) return false;
+  if (F.minWin > 0 && !(o.ev && o.ev.st && recFor(o.ev.st).wp*100 >= F.minWin)) return false;
+  return true;
+}
+const filtersOn = () => { const F = S.alF; return F.strat !== 'any' || F.side !== 'both' || F.stat !== 'all' || F.minWin > 0 || F.mine; };
+function renderAlFilters(){
+  const F = S.alF, setIf = (el, html) => { if (el && el.dataset.h !== html) { el.innerHTML = html; el.dataset.h = html; } };
+  const pl = provenList();
+  setIf($('#alStrat'), `<option value="any">Any strategy or combo</option>` + pl.slice(0, 60).map(o => `<option value="${esc(o.id)}">${esc(o.n)} \u2014 ${pct(o.rec.wp)} of ${o.rec.n} (${o.rec.roi >= 0 ? '+' : ''}${Math.round(o.rec.roi*100)}%)</option>`).join('')
+    + (F.strat !== 'any' && !pl.some(o => o.id === F.strat) ? `<option value="${esc(F.strat)}">${esc((stratById(F.strat) || {n: F.strat}).n)}</option>` : ''));
+  const stats = [...new Set(ALERTS.map(a => a.stat).filter(k => k && STATS[k]))];
+  if (F.stat !== 'all' && !stats.includes(F.stat)) stats.push(F.stat);
+  setIf($('#alStat'), `<option value="all">All stats</option>` + stats.map(k => `<option value="${esc(k)}">${esc(statWord(k))}</option>`).join(''));
+  if ($('#alStrat')) $('#alStrat').value = F.strat;
+  if ($('#alStat')) $('#alStat').value = F.stat;
+  if ($('#alMin')) $('#alMin').value = String(F.minWin);
+  if ($('#alMine')) { $('#alMine').checked = !!F.mine; $('#alMine').disabled = S.book === 'any'; }
+  const mineL = $('#alMineL'); if (mineL) mineL.textContent = S.book === 'any' ? 'Only alerts my app still has (pick your app in the top menu first)' : `Only alerts ${bookName(S.book)} still has`;
+  $$('#alSide button').forEach(b => b.setAttribute('aria-pressed', b.dataset.v === F.side));
+  const sb = $('#alSound'); if (sb) { sb.textContent = S.alSound ? '\uD83D\uDD14 Sound on' : '\uD83D\uDD15 Sound off'; sb.setAttribute('aria-pressed', S.alSound); }
+}
+
 /* ---------- in-app sharp-line alerts (sent by line_alerts.py; only the last hour is shown) ---------- */
 // Each alert is re-checked here against the Strategy lab: moves that fit a proven strategy go on top, the rest are folded away.
 let ALERTS = [], alertTimer = null, alertLast = null;
@@ -3219,18 +3322,14 @@ function alertEval(a){
     entries(p, a.stat).filter(e => e.line === line).forEach(e => { const v = priceOf(e, side); if (v != null && (odds == null || amToDec(v) > amToDec(odds))) odds = v; });
     if (odds == null) odds = -110;
     const r = evalProp(p, a.stat, line, side), x = {p, k:a.stat, line, side, odds, r, edge: r.prob - implied(odds), score: r.score, book:true};
-    const R = stratRecords(), fits = LAB.filter(st => st.t && st.t(x)), user = stratOn();
+    const all = fitsAll(x), user = stratOn();
     let st = null, proven = false;
-    if (user) { if (user.t && user.t(x)) { st = user; proven = true; } }
-    else {
-      const pv = fits.filter(s => R[s.id] && isProven(R[s.id])).sort((s1, s2) => R[s2.id].roi - R[s1.id].roi);
-      const ok = fits.filter(s => R[s.id] && R[s.id].n >= OK_N && R[s.id].roi > 0).sort((s1, s2) => R[s2.id].roi - R[s1.id].roi);
-      st = pv[0] || ok[0] || null; proven = !!pv[0];
-    }
-    return {x, fits, st, proven, agree: r.prob >= .5};
+    if (user) { if (user.t && user.t(x)) { st = {id: user.id, n: user.n}; proven = true; } }
+    else { const b = all.find(o => o.proven) || all.find(o => o.rec.n >= 30 && o.rec.roi > 0); if (b) { st = {id: b.id, n: b.n}; proven = !!b.proven; } }
+    return {x, fits: all.filter(o => o.proven), allIds: all.map(o => o.id), st, proven, agree: r.prob >= .5};
   } catch(e){ return null; }
 }
-const alertTop = a => a.kind === 'pulled' || (a.kind !== 'moved' && !!(alertEval(a) || {}).proven);
+const alertTop = a => { const o = {a, ev: alertEval(a)}; return (a.kind === 'pulled' || (a.kind !== 'moved' && !!(o.ev || {}).proven)) && alertPass(o); };
 async function loadAlerts(){
   if (!sharedDb) return;
   try {
@@ -3241,8 +3340,9 @@ async function loadAlerts(){
   } catch(e){ return; }
   const top = ALERTS.filter(alertTop), newest = top[0] ? top[0].t : '';
   if (alertLast !== null && newest && newest > alertLast) {
-    toast(`📣 Proven-strategy alert: ${top[0].pick}`);
-    try { if (navigator.vibrate) navigator.vibrate(200); } catch(e){}
+    toast(`\uD83D\uDCE3 Proven-strategy alert: ${top[0].pick}`);
+    try { if (navigator.vibrate) navigator.vibrate([200, 100, 200]); } catch(e){}
+    if (S.alSound) chime();
   }
   if (alertLast === null || newest > alertLast) alertLast = newest;
   renderAlerts();
@@ -3251,8 +3351,9 @@ function renderAlerts(){
   const box = $('#alertBox'); if (!box) return;
   const now = Date.now(); ALERTS = ALERTS.filter(a => now - Date.parse(a.t) < ALERT_MS);
   const seen = lsGet(LSP+'alertSeen') || '';
-  const top = [], rest = [];
-  ALERTS.forEach(a => { const ev = alertEval(a); (a.kind === 'pulled' || (a.kind !== 'moved' && ev && ev.proven) ? top : rest).push({a, ev}); });
+  renderAlFilters();
+  const top = [], rest = []; let hidden = 0;
+  ALERTS.forEach(a => { const ev = alertEval(a), o = {a, ev}; if (!alertPass(o)) { hidden++; return; } (a.kind === 'pulled' || (a.kind !== 'moved' && ev && ev.proven) ? top : rest).push(o); });
   const unseen = top.filter(o => o.a.t > seen).length;
   const tb = $('.tab[data-tab="alerts"]');
   if (tb) { let d = tb.querySelector('.adot'); if (unseen && S.tab !== 'today' && S.tab !== 'alerts') { if (!d) { d = document.createElement('span'); d.className = 'count adot'; tb.appendChild(d); } d.textContent = unseen; } else if (d) d.remove(); }
@@ -3266,10 +3367,10 @@ function renderAlerts(){
     return `<div class="al ${tone} ${a.t > seen ? 'new' : ''}">
       <div class="al-h"><span class="bb-badge ${tone}">${tone === 'g' ? '🟢 BET IT' : '🟡 SMALL BET'}</span><span class="meta">${ago(a.t)}</span></div>
       <div class="al-pick ${a.side === 'over' ? 'side-o' : 'side-u'}">${esc(a.name)} ${a.side === 'over' ? 'OVER' : 'UNDER'} ${esc(String(a.line))} ${esc(statWord(a.stat))} <span class="meta" style="font-size:15px">${esc(a.team || '')}</span></div>
-      <div class="al-l"><b>${esc(whyText(ev.st.id, x))}.</b>${rec.n ? ` Picks like this won <b>${pct(rec.wp)}</b> of ${rec.n}.` : ''}</div>
+      <div class="al-l"><b>${esc(whyFor(ev.st.id, x))}.</b>${rec.n ? ` Picks like this won <b>${pct(rec.wp)}</b> of ${rec.n}.` : ''}</div>
       ${a.where && a.where.length ? `<div class="al-l">📍 <b>Where:</b> ${esc(a.where.join(', '))}</div>` : ''}
       ${a.why ? `<div class="al-l">📈 <b>Why:</b> ${esc(a.why)}</div>` : ''}
-      <div class="al-l">🏆 ${esc(ev.st.n)}${also.length ? `, also ${also.map(s => esc(s.n)).join(', ')}` : ''}</div>
+      <div class="al-l">\uD83C\uDFC6 <b>${esc(ev.st.n)}</b>${rec.n ? `: ${rec.w}\u2013${rec.l}, ${rec.roi >= 0 ? '+' : ''}${Math.round(rec.roi*100)}% return` : ''}${also.length ? `. Also fits ${also.length} more proven: ${also.slice(0, 3).map(s => esc(s.n)).join('; ')}${also.length > 3 ? '\u2026' : ''}` : ''}</div>
       <div class="al-l">🧪 ${ev.agree ? 'Our model agrees' : 'Our model leans the other way'}: ${pct(x.r.prob)} chance it hits${steep ? '. Price is steep, bet small.' : ''}</div>
       ${open(a)}</div>`;
   };
@@ -3284,7 +3385,7 @@ function renderAlerts(){
   // Today: proven moves only, with a link to the full list
   box.innerHTML = top.length || rest.length ? `<details class="panel alerts" ${S.alertOpen === false ? '' : 'open'}><summary><b>📣 Sharp money moves</b> <span class="meta">${top.length ? `${top.length} fit${top.length === 1 ? 's' : ''} a proven strategy` : 'none fit a proven strategy'}${unseenTop ? `, <b style="color:var(--warn)">${unseenTop} new</b>` : ''}</span></summary>
     ${top.length ? top.slice(0, 5).map(big).join('') : '<div class="meta" style="margin-top:10px">No sharp move in the last hour fits a proven strategy.</div>'}
-    <button class="btn sec bb-moreb" data-gotab="alerts">See all ${ALERTS.length} alert${ALERTS.length === 1 ? '' : 's'} →</button>
+    <button class="btn sec bb-moreb" data-gotab="alerts">See all ${ALERTS.length} alert${ALERTS.length === 1 ? '' : 's'}${hidden ? ` (${hidden} hidden by filters)` : ''} \u2192</button>
   </details>` : '';
   // Alerts tab: everything, filtered
   const list = $('#alertList');
@@ -3296,6 +3397,7 @@ function renderAlerts(){
     const html = (f === 'all' || f === 'pulled' ? sec('🚨 Props pulled', pulled, big) : '')
       + (f === 'all' || f === 'top' ? sec('🏆 Fits a proven strategy', proven, big) : '')
       + (f === 'all' || f === 'other' ? sec('👀 Other line moves', rest, small) : '');
+    const sub = $('#alSub'); if (sub) sub.innerHTML = `Every sharp line move from the last hour. Proven strategies and combos come first. Alerts disappear after an hour.${filtersOn() ? ` <b style="color:var(--warn)">Filters on: ${hidden} hidden.</b>` : ''}`;
     list.innerHTML = html || `<div class="panel" style="margin-top:14px"><div class="empty"><b>No alerts${f === 'all' ? '' : ' here'} in the last hour</b>The line checker runs every 10 minutes from 7 AM to 7 PM.</div></div>`;
   }
   if ((S.tab === 'today' || S.tab === 'alerts') && unseen) setTimeout(() => { if ((S.tab === 'today' || S.tab === 'alerts') && top[0]) lsSet(LSP+'alertSeen', top[0].a.t); }, 4000);
@@ -3316,6 +3418,7 @@ function stratRecords(){
 }
 function recFor(st){
   const R = stratRecords(); if (R[st.id]) return R[st.id];
+  const C = comboRecords(); if (C[st.id]) return C[st.id];
   const o = labStats([st.id])[st.id] || {w:0, l:0}, n = o.w + o.l, wp = n ? o.w/n : 0;
   return {w:o.w, l:o.l, n, wp, roi: n ? wp*1.87 - 1 : 0};
 }
@@ -3362,13 +3465,15 @@ function bbVerdict(x){
   const fits = LAB.filter(st => st.t && st.t(x));
   let use;
   if (user) { if (!user.t || !user.t(x)) return null; use = user; }
-  else {
-    use = fits.filter(st => R[st.id] && R[st.id].n >= OK_N && R[st.id].roi > 0)
-      .sort((a,b) => isProven(R[b.id]) - isProven(R[a.id]) || R[b.id].roi - R[a.id].roi)[0];
-    if (!use) return null;
+  let auto = null;
+  if (!user) {
+    const all = fitsAll(x);
+    auto = all.find(o => o.proven) || all.find(o => !o.combo && o.rec.n >= OK_N && o.rec.roi > 0);
+    if (!auto) return null;
+    use = {id: auto.id, n: auto.n};
   }
   const rec = recFor(use);
-  let tone = isProven(rec) ? 'g' : 'y', note = '';
+  let tone = (auto ? auto.proven : isProven(rec)) ? 'g' : 'y', note = '';
   if (x.odds < -250) { tone = 'y'; note = 'The price is steep, so bet small.'; }
   else if (tone === 'y') note = rec.n ? (rec.n < PROVEN_N ? `Only ${rec.n} past picks like this, so it isn’t proven yet. Bet small.` : 'This strategy is close to break-even. Bet small.') : 'No past results for this strategy yet. Bet small.';
   return {tone, st:use, rec, note, fits};
@@ -3381,7 +3486,7 @@ function bbCard(x, v, i, top){
     ${top ? '<div class="bb-star">⭐ Pick of the day</div>' : ''}
     <div class="bb-row1"><span class="bb-badge ${v.tone}">${v.tone === 'g' ? '🟢 BET IT' : '🟡 SMALL BET'}</span><span class="bb-who"><b>${esc(x.p.name)}</b> <span class="meta">${esc(x.p.team)} ${opp}</span></span></div>
     <div class="bb-bet ${x.side === 'over' ? 'side-o' : 'side-u'}">${x.side === 'over' ? 'OVER' : 'UNDER'} ${x.line} ${esc(statWord(x.k))}</div>
-    <div class="bb-why">${esc(whyText(v.st.id, x))}.${wp != null ? ` Picks like this won <b>${wp}%</b> of the time.` : ''}</div>
+    <div class="bb-why">${esc(whyFor(v.st.id, x))}.${wp != null ? ` Picks like this won <b>${wp}%</b> of the time.` : ''}</div>
     <div class="bb-foot"><span class="meta">${esc(priceTxt(x))}${nx ? `, ${esc(gameWhen(nx))}` : ''}</span><span class="bb-more">Details ▾</span></div>
   </summary><div class="bb-body">
     <div class="bb-stats">
@@ -3592,7 +3697,16 @@ $$('.tab').forEach(b => b.addEventListener('click', () => setTab(b.dataset.tab))
 $('#fab').addEventListener('click', () => setTab('parlay'));
 $('#view-alerts').addEventListener('click', e => {
   const f = e.target.closest('[data-alf]'); if (f) { S.alf = f.dataset.alf; renderAlerts(); return; }
+  const sd = e.target.closest('#alSide [data-v]'); if (sd) { S.alF.side = sd.dataset.v; lsSet(LSP+'alF', S.alF); renderAlerts(); return; }
+  if (e.target.closest('#alSound')) { S.alSound = !S.alSound; lsSet(LSP+'alSound', S.alSound); if (S.alSound) { audio(); chime(); toast('Sound on: you\u2019ll hear a chime for proven alerts while the app is open'); } else toast('Sound off'); renderAlFilters(); return; }
+  if (e.target.closest('#alTest')) { audio(); chime(); return; }
+  if (e.target.closest('#alReset')) { S.alF = {strat:'any', side:'both', stat:'all', minWin:0, mine:false}; lsSet(LSP+'alF', S.alF); renderAlerts(); toast('Filters cleared'); return; }
   const al = e.target.closest('[data-alopen]'); if (al) { const [n, k] = al.dataset.alopen.split('|'); const pl = S.players.find(q => q.name === n); if (pl) { if (k && STATS[k]) S.stat = k; selectPlayer(pl.id, true); setTab('analyzer'); } }
+});
+$('#view-alerts').addEventListener('change', e => {
+  const t = e.target, F = S.alF;
+  if (t.id === 'alStrat') F.strat = t.value; else if (t.id === 'alStat') F.stat = t.value; else if (t.id === 'alMin') F.minWin = +t.value; else if (t.id === 'alMine') F.mine = t.checked; else return;
+  lsSet(LSP+'alF', F); renderAlerts();
 });
 $('#alertBox').addEventListener('toggle', e => { if (e.target.matches('details.alerts')) S.alertOpen = e.target.open; }, true);
 document.addEventListener('click', e => { const g = e.target.closest('[data-gotab]'); if (g) { e.preventDefault(); setTab(g.dataset.gotab); } });
