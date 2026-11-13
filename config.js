@@ -9,5 +9,7 @@ window.PROPLAB_CONFIG = {
     appId: "1:612426098930:web:7cdee4d40422dc5ab3086b"
   },
   // Your Google email: you can publish data and everyone else reads it
-  ownerEmail: "luisgjovel@gmail.com"
+  ownerEmail: "luisgjovel@gmail.com",
+  // Phone alerts key: Firebase > Project settings > Cloud Messaging > Web Push certificates
+  vapidKey: "BNiNYeKgZ_FTrtc12VKfUK4YulX-l75FX8fDuF8Yce6aKyS0R7zzk8OJUhLQ5_MLLGHemC83JIbCFRigdI2hkvs"
 };
