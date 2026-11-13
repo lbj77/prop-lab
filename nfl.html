@@ -751,6 +751,7 @@ details.inj{margin-top:22px!important}
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-messaging-compat.js"></script>
 <script src="config.js"></script>
 <script>
 /* Private web app: Google sign-in, invite-only, data in your own free Firebase project */
@@ -888,7 +889,8 @@ details.inj{margin-top:22px!important}
         <label class="f2">Strategy wins at least<select class="ghost" id="alMin"><option value="0">Any</option><option value="55">55%</option><option value="58">58%</option><option value="60">60%</option><option value="65">65%</option></select></label>
         <label class="chk full"><input type="checkbox" id="alMine"> <span id="alMineL">Only alerts my app still has</span></label>
         <div class="full" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><button class="ghost" id="alSound" style="width:auto">🔕 Sound off</button><button class="ghost" id="alTest" style="width:auto">Test sound</button><button class="ghost" id="alReset" style="width:auto">Clear filters</button></div>
-        <p class="meta full" style="margin:0">Filters also decide which alerts show on Today, pop up, buzz and play the sound. Sound works while the app is open on your screen.</p>
+        <p class="meta full" style="margin:0">Filters also decide which alerts show on Today, pop up, buzz and play the sound. The chime plays while the app is open; phone alerts below ring even when it’s closed.</p>
+        <div class="full" id="pushWrap" hidden style="border-top:1px solid var(--line);padding-top:12px"><button class="btn" id="pushBtn" style="width:auto">📲 Turn on phone alerts</button><p class="meta" id="pushNote" style="margin:8px 0 0"></p></div>
       </div></details>
     </div>
     <div id="alertList"></div>
@@ -3305,7 +3307,63 @@ function renderAlFilters(){
   if ($('#alMine')) { $('#alMine').checked = !!F.mine; $('#alMine').disabled = S.book === 'any'; }
   const mineL = $('#alMineL'); if (mineL) mineL.textContent = S.book === 'any' ? 'Only alerts my app still has (pick your app in the top menu first)' : `Only alerts ${bookName(S.book)} still has`;
   $$('#alSide button').forEach(b => b.setAttribute('aria-pressed', b.dataset.v === F.side));
+  renderPush();
   const sb = $('#alSound'); if (sb) { sb.textContent = S.alSound ? '\uD83D\uDD14 Sound on' : '\uD83D\uDD15 Sound off'; sb.setAttribute('aria-pressed', S.alSound); }
+}
+
+/* ---------- phone / computer notifications (web app only, via Firebase Cloud Messaging) ---------- */
+const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+const isStandalone = () => (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true;
+const pushKey = () => lsGet(LSP+'pushTok');
+const tokHash = t => { let h = 0; for (let i = 0; i < t.length; i++) h = (h*31 + t.charCodeAt(i)) | 0; return 'd' + (h >>> 0).toString(36); };
+const pushRef = tok => (typeof cloud !== 'undefined' && cloud && cloud.stateRef) ? cloud.stateRef.collection('push').doc(tokHash(tok)) : null;
+const pushPrefs = () => ({filters: S.alF, strat: S.strat || 'all', book: S.book, bookName: S.book === 'any' ? '' : bookName(S.book),
+  url: location.href.split('#')[0].split('?')[0], sport: NBA ? 'nba' : 'nfl', device: navigator.userAgent.slice(0, 140), updatedAt: new Date().toISOString()});
+let pushT = null;
+function pushSync(){ clearTimeout(pushT); pushT = setTimeout(async () => { const t = pushKey(); if (!t) return; const r = pushRef(t); if (!r) return; try { await r.set(Object.assign({token: t}, pushPrefs())); } catch(e){} }, 600); }
+function saveAlF(v){ lsSet(LSP+'alF', v); pushSync(); }
+async function pushOn(){
+  if (!window.__WEBAPP || !window.firebase || !firebase.messaging) { toast('Phone alerts work in the web app, not in this preview.'); return; }
+  if (isIOS && !isStandalone()) { toast('iPhone/iPad: tap Share, then Add to Home Screen. Open Prop Lab from that icon and turn this on there.'); return; }
+  if (!('Notification' in window) || !('serviceWorker' in navigator)) { toast('This browser can’t show notifications. Try Chrome, Edge or Safari.'); return; }
+  const C = window.PROPLAB_CONFIG || {};
+  if (!C.vapidKey || /PASTE/.test(C.vapidKey)) { toast('One setup step left: add your web push key to config.js'); return; }
+  if (typeof cloud === 'undefined' || !cloud || !cloud.stateRef) { toast('Still signing in. Try again in a few seconds.'); return; }
+  const perm = await Notification.requestPermission();
+  if (perm !== 'granted') { toast('Notifications are blocked. Allow them for this site in your browser or phone settings.'); renderPush(); return; }
+  try {
+    const reg = await navigator.serviceWorker.register('firebase-messaging-sw.js');
+    await navigator.serviceWorker.ready;
+    const tok = await firebase.messaging().getToken({vapidKey: C.vapidKey, serviceWorkerRegistration: reg});
+    if (!tok) throw new Error('no token');
+    lsSet(LSP+'pushTok', tok);
+    await pushRef(tok).set(Object.assign({token: tok}, pushPrefs()));
+    toast('Phone alerts on. Proven alerts that match your filters will ring this device, even with the app closed.');
+  } catch(e){ toast('Couldn’t turn on alerts: ' + String((e && e.message) || e).slice(0, 100)); }
+  renderPush();
+}
+async function pushOff(){
+  const t = pushKey();
+  if (t) { try { const r = pushRef(t); if (r) await r.delete(); } catch(e){} try { await firebase.messaging().deleteToken(); } catch(e){} }
+  lsSet(LSP+'pushTok', null); toast('Phone alerts off on this device'); renderPush();
+}
+// tokens can change: refresh this device's entry when the app opens
+async function pushRefresh(){
+  if (!pushKey() || !window.__WEBAPP || typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
+  try { const C = window.PROPLAB_CONFIG || {}, reg = await navigator.serviceWorker.register('firebase-messaging-sw.js'); await navigator.serviceWorker.ready;
+    const tok = await firebase.messaging().getToken({vapidKey: C.vapidKey, serviceWorkerRegistration: reg});
+    if (tok && tok !== pushKey()) { try { const old = pushRef(pushKey()); if (old) await old.delete(); } catch(e){} lsSet(LSP+'pushTok', tok); }
+    pushSync(); } catch(e){}
+}
+function renderPush(){
+  const b = $('#pushBtn'), n = $('#pushNote'), w = $('#pushWrap'); if (!b) return;
+  if (w) w.hidden = !window.__WEBAPP;
+  const on = !!pushKey() && typeof Notification !== 'undefined' && Notification.permission === 'granted';
+  b.textContent = on ? '📲 Phone alerts are ON (tap to turn off)' : '📲 Turn on phone alerts';
+  b.className = on ? 'btn sec' : 'btn';
+  n.textContent = on ? 'This device gets a notification with sound for proven alerts that match the filters above, even when Prop Lab is closed. Changing a filter updates it.'
+    : isIOS && !isStandalone() ? 'iPhone/iPad: tap Share → Add to Home Screen, open Prop Lab from the new icon, then tap this button (iOS 16.4 or newer).'
+    : 'Works on Android, iPhone/iPad (from the home screen icon) and computers. Turn it on once on each device.';
 }
 
 /* ---------- in-app sharp-line alerts (sent by line_alerts.py; only the last hour is shown) ---------- */
@@ -3695,24 +3753,27 @@ function renderAll(){
 /* ---------- events ---------- */
 $$('.tab').forEach(b => b.addEventListener('click', () => setTab(b.dataset.tab)));
 $('#fab').addEventListener('click', () => setTab('parlay'));
+if (location.hash === '#alerts') setTimeout(() => setTab('alerts'), 300);
+window.addEventListener('hashchange', () => { if (location.hash === '#alerts') setTab('alerts'); });
 $('#view-alerts').addEventListener('click', e => {
   const f = e.target.closest('[data-alf]'); if (f) { S.alf = f.dataset.alf; renderAlerts(); return; }
-  const sd = e.target.closest('#alSide [data-v]'); if (sd) { S.alF.side = sd.dataset.v; lsSet(LSP+'alF', S.alF); renderAlerts(); return; }
+  const sd = e.target.closest('#alSide [data-v]'); if (sd) { S.alF.side = sd.dataset.v; saveAlF(S.alF); renderAlerts(); return; }
   if (e.target.closest('#alSound')) { S.alSound = !S.alSound; lsSet(LSP+'alSound', S.alSound); if (S.alSound) { audio(); chime(); toast('Sound on: you\u2019ll hear a chime for proven alerts while the app is open'); } else toast('Sound off'); renderAlFilters(); return; }
   if (e.target.closest('#alTest')) { audio(); chime(); return; }
-  if (e.target.closest('#alReset')) { S.alF = {strat:'any', side:'both', stat:'all', minWin:0, mine:false}; lsSet(LSP+'alF', S.alF); renderAlerts(); toast('Filters cleared'); return; }
+  if (e.target.closest('#pushBtn')) { pushKey() ? pushOff() : pushOn(); return; }
+  if (e.target.closest('#alReset')) { S.alF = {strat:'any', side:'both', stat:'all', minWin:0, mine:false}; saveAlF(S.alF); renderAlerts(); toast('Filters cleared'); return; }
   const al = e.target.closest('[data-alopen]'); if (al) { const [n, k] = al.dataset.alopen.split('|'); const pl = S.players.find(q => q.name === n); if (pl) { if (k && STATS[k]) S.stat = k; selectPlayer(pl.id, true); setTab('analyzer'); } }
 });
 $('#view-alerts').addEventListener('change', e => {
   const t = e.target, F = S.alF;
   if (t.id === 'alStrat') F.strat = t.value; else if (t.id === 'alStat') F.stat = t.value; else if (t.id === 'alMin') F.minWin = +t.value; else if (t.id === 'alMine') F.mine = t.checked; else return;
-  lsSet(LSP+'alF', F); renderAlerts();
+  saveAlF(F); renderAlerts();
 });
 $('#alertBox').addEventListener('toggle', e => { if (e.target.matches('details.alerts')) S.alertOpen = e.target.open; }, true);
 document.addEventListener('click', e => { const g = e.target.closest('[data-gotab]'); if (g) { e.preventDefault(); setTab(g.dataset.gotab); } });
 $('#dataBtn').addEventListener('click', () => { renderRunReport(); const d=$('#drawer'); d.hidden=!d.hidden; $('#dataBtn').setAttribute('aria-expanded', !d.hidden); });
 $('#playerIn').addEventListener('change', e => { const v = e.target.value.trim().toLowerCase(); const p = S.players.find(x=>x.name.toLowerCase()===v) || S.players.find(x=>x.name.toLowerCase().includes(v)); if (p) selectPlayer(p.id); });
-['#stratSel','#stratSel2','#fStrat'].forEach(id => $(id).addEventListener('change', e => { S.strat = e.target.value; lsSet(LSP+'strat', S.strat); renderAll(); toast(S.strat === 'all' ? 'Showing all props' : `Only props that fit “${stratOn().n}”`); }));
+['#stratSel','#stratSel2','#fStrat'].forEach(id => $(id).addEventListener('change', e => { S.strat = e.target.value; lsSet(LSP+'strat', S.strat); pushSync(); renderAll(); toast(S.strat === 'all' ? 'Showing all props' : `Only props that fit “${stratOn().n}”`); }));
 $('#injImpact').addEventListener('input', e => { if (e.target.id === 'outSearch') { S.outQ = e.target.value; renderOutHits(); } });
 $('#injImpact').addEventListener('click', e => { const m = e.target.closest('[data-markout]'); if (m) { S.outQ = ''; markOut(m.dataset.markout); } });
 $('#anInj').addEventListener('click', e => { const m = e.target.closest('[data-markout]'); if (m) markOut(m.dataset.markout); });
@@ -3777,7 +3838,7 @@ $('#view-today').addEventListener('change', e => {
 });
 $('#mateTbl').addEventListener('click', e => { const b = e.target.closest('[data-mate]'); if (!b) return; toggleOut(b.dataset.mate); renderAnalyzer(); });
 $('#shopTbl').addEventListener('click', e => { const b = e.target.closest('[data-use]'); if (!b) return; const x = shopRows[+b.dataset.use]; S.line = x.e.line; S.odds = x.odds; S.lineIsBook = true; S.lineBk = x.e.book; renderAnalyzer(); });
-$('#bookSel').addEventListener('change', e => { S.book = e.target.value; lsSet(LSP+'book', S.book); setLineFromBook(); renderAll(); toast(S.book==='any' ? 'Using the best line across your apps' : `Building for ${bookName(S.book)}`); });
+$('#bookSel').addEventListener('change', e => { S.book = e.target.value; lsSet(LSP+'book', S.book); pushSync(); setLineFromBook(); renderAll(); toast(S.book==='any' ? 'Using the best line across your apps' : `Building for ${bookName(S.book)}`); });
 $('#payEd').addEventListener('change', e => { const i = e.target.closest('[data-pay]'); if (!i) return; const v = +i.value; if (v > 1) { S.pay[i.dataset.pay] = v; lsSet(LSP+'pay', S.pay); } renderParlay(); });
 $('#injPanel').addEventListener('click', e => {
   const c = e.target.closest('[data-tog]'); if (c) { toggleOut(c.dataset.tog); renderToday(); return; }
@@ -3830,13 +3891,13 @@ document.addEventListener('click', e => {
 });
 $('#labPanel').addEventListener('click', e => {
   const ug = e.target.closest('[data-usegrade]'); if (ug) { const [sid, g] = ug.dataset.usegrade.split('|'); const same = (S.strat||'all') === sid && gradeOn() && S.grades.length === 1 && S.grades[0] === g;
-    S.strat = same ? 'all' : sid; S.grades = same ? ['A','B','C','D'] : [g]; lsSet(LSP+'strat', S.strat); lsSet(LSP+'grades', S.grades); matchesOpen = !same; renderLab(); renderStratSel();
+    S.strat = same ? 'all' : sid; S.grades = same ? ['A','B','C','D'] : [g]; lsSet(LSP+'strat', S.strat); pushSync(); lsSet(LSP+'grades', S.grades); matchesOpen = !same; renderLab(); renderStratSel();
     toast(same ? 'Filter off' : `Using ${filterLabel()}`); if (!same) $('#stratMatches').scrollIntoView({behavior:'smooth', block:'start'}); return; }
-  if (e.target.closest('[data-clearfilter]')) { S.strat = 'all'; S.grades = ['A','B','C','D']; lsSet(LSP+'strat', S.strat); lsSet(LSP+'grades', S.grades); matchesOpen = false; renderLab(); renderStratSel(); toast('Filter off'); return; }
+  if (e.target.closest('[data-clearfilter]')) { S.strat = 'all'; S.grades = ['A','B','C','D']; lsSet(LSP+'strat', S.strat); pushSync(); lsSet(LSP+'grades', S.grades); matchesOpen = false; renderLab(); renderStratSel(); toast('Filter off'); return; }
   const g = e.target.closest('[data-goto]'); if (g) { matchesOpen = false; setTab(g.dataset.goto); return; }
   if (e.target.closest('[data-closematch]')) { matchesOpen = false; renderStratMatches(); return; }
   const m = e.target.closest('[data-madd]'); if (m) { toggleX(matchRows[+m.dataset.madd]); renderStratMatches(); renderSlipBadges(); return; }
-  const b = e.target.closest('[data-usestrat]'); if (!b) return; S.strat = S.strat === b.dataset.usestrat ? 'all' : b.dataset.usestrat; matchesOpen = S.strat !== 'all'; lsSet(LSP+'strat', S.strat); renderLab(); renderStratSel(); toast(S.strat === 'all' ? 'Strategy filter off' : `Filtering by “${stratOn().n}”: matching props are listed at the top of this panel`); if (S.strat !== 'all') $('#stratMatches').scrollIntoView({behavior:'smooth', block:'start'}); });
+  const b = e.target.closest('[data-usestrat]'); if (!b) return; S.strat = S.strat === b.dataset.usestrat ? 'all' : b.dataset.usestrat; matchesOpen = S.strat !== 'all'; lsSet(LSP+'strat', S.strat); pushSync(); renderLab(); renderStratSel(); toast(S.strat === 'all' ? 'Strategy filter off' : `Filtering by “${stratOn().n}”: matching props are listed at the top of this panel`); if (S.strat !== 'all') $('#stratMatches').scrollIntoView({behavior:'smooth', block:'start'}); });
 $('#calPanel').addEventListener('click', e => { if (e.target.closest('[data-learn]')) { S.learnOn = S.learnOn === false; lsSet(LSP+'learnOn', S.learnOn); renderAll(); toast(S.learnOn ? 'Learning model on' : 'Learning model off'); return; } if (!e.target.closest('[data-calib]')) return; S.calibOn = S.calibOn === false; lsSet(LSP+'calibOn', S.calibOn); renderAll(); toast(S.calibOn ? 'Model correction on' : 'Model correction off'); });
 $('#comboAll').addEventListener('click', e => { const b = e.target.closest('[data-ca]'); if (!b) return; lsSet(LSP+'comboAll', b.dataset.ca === 'true'); renderLab(); });
 $('#comboMin').addEventListener('click', e => { const b = e.target.closest('[data-cm]'); if (!b) return; lsSet(LSP+'comboMin', +b.dataset.cm); renderLab(); });
@@ -4111,6 +4172,7 @@ $('#shareChk').addEventListener('change', async e => {
     let assets = null; try { assets = await claude.use('assets'); } catch(e){}
     const stateRef = db.doc(`data/users/${uid}/state`);
     cloud = {db, assets, uid, stateRef, slipsCol: stateRef.collection('slips'), labCol: stateRef.collection('lab')};
+    setTimeout(pushRefresh, 1500);
     // pull this person's own synced file if it's newer than this device's copy
     try {
       const st = await stateRef.get();
