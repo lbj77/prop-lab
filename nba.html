@@ -925,7 +925,8 @@ details.inj{margin-top:22px!important}
         <label class="f2">Stat<select class="ghost" id="alStat"></select></label>
         <label class="f2">Strategy wins at least<select class="ghost" id="alMin"><option value="0">Any</option><option value="55">55%</option><option value="58">58%</option><option value="60">60%</option><option value="65">65%</option></select></label>
         <label class="chk full"><input type="checkbox" id="alMine"> <span id="alMineL">Only alerts my app still has</span></label>
-        <div class="full" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><button class="ghost" id="alSound" style="width:auto">🔕 Sound off</button><button class="ghost" id="alTest" style="width:auto">Test sound</button><button class="ghost" id="alReset" style="width:auto">Clear filters</button></div>
+        <label class="chk full"><input type="checkbox" id="alOthers"> <span>Also ring once for other line moves (proven strategies ring twice)</span></label>
+        <div class="full" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><button class="ghost" id="alSound" style="width:auto">🔕 Sound off</button><button class="ghost" id="alTest" style="width:auto">Test: proven (2 beeps)</button><button class="ghost" id="alTest1" style="width:auto">Test: other (1 beep)</button><button class="ghost" id="alReset" style="width:auto">Clear filters</button></div>
         <p class="meta full" style="margin:0">Filters also decide which alerts show on Today, pop up, buzz and play the sound. The chime plays while the app is open; phone alerts below ring even when it’s closed.</p>
         <div class="full" id="pushWrap" hidden style="border-top:1px solid var(--line);padding-top:12px"><button class="btn" id="pushBtn" style="width:auto">📲 Turn on phone alerts</button><p class="meta" id="pushNote" style="margin:8px 0 0"></p></div>
       </div></details>
@@ -3318,16 +3319,16 @@ function provenList(){
   return out.sort((a,b) => sc(b) - sc(a));
 }
 /* alert filters and sound */
-S.alF = Object.assign({strat:'any', side:'both', stat:'all', minWin:0, mine:false}, lsGet(LSP+'alF') || {});
+S.alF = Object.assign({strat:'any', side:'both', stat:'all', minWin:0, mine:false, others:true}, lsGet(LSP+'alF') || {});
 S.alSound = !!lsGet(LSP+'alSound');
 let AC = null;
 function audio(){ try { if (!AC) AC = new (window.AudioContext || window.webkitAudioContext)(); if (AC.state === 'suspended') AC.resume(); } catch(e){} return AC; }
-function chime(){
+function chime(n = 2){
   const ac = audio(); if (!ac) return;
   try { const t = ac.currentTime + .02;
-    [880, 1175, 1568].forEach((f, i) => { const o = ac.createOscillator(), g = ac.createGain(), s = t + i*.16;
-      o.type = 'sine'; o.frequency.value = f; g.gain.setValueAtTime(.0001, s); g.gain.exponentialRampToValueAtTime(.4, s + .02); g.gain.exponentialRampToValueAtTime(.0001, s + .45);
-      o.connect(g); g.connect(ac.destination); o.start(s); o.stop(s + .5); }); } catch(e){}
+    for (let i = 0; i < n; i++) { const o = ac.createOscillator(), g = ac.createGain(), st = t + i*.32, f = n > 1 ? 1175 : 880;
+      o.type = 'sine'; o.frequency.value = f; g.gain.setValueAtTime(.0001, st); g.gain.exponentialRampToValueAtTime(.45, st + .02); g.gain.exponentialRampToValueAtTime(.0001, st + .24);
+      o.connect(g); g.connect(ac.destination); o.start(st); o.stop(st + .28); } } catch(e){}
 }
 // phones only allow sound after a tap, so wake the audio on the first tap if sound is on
 document.addEventListener('pointerdown', () => { if (S.alSound) audio(); }, {passive: true});
@@ -3354,6 +3355,7 @@ function renderAlFilters(){
   if ($('#alStrat')) $('#alStrat').value = F.strat;
   if ($('#alStat')) $('#alStat').value = F.stat;
   if ($('#alMin')) $('#alMin').value = String(F.minWin);
+  if ($('#alOthers')) $('#alOthers').checked = F.others !== false;
   if ($('#alMine')) { $('#alMine').checked = !!F.mine; $('#alMine').disabled = S.book === 'any'; }
   const mineL = $('#alMineL'); if (mineL) mineL.textContent = S.book === 'any' ? 'Only alerts my app still has (pick your app in the top menu first)' : `Only alerts ${bookName(S.book)} still has`;
   $$('#alSide button').forEach(b => b.setAttribute('aria-pressed', b.dataset.v === F.side));
@@ -3411,14 +3413,14 @@ function renderPush(){
   const on = !!pushKey() && typeof Notification !== 'undefined' && Notification.permission === 'granted';
   b.textContent = on ? '📲 Phone alerts are ON (tap to turn off)' : '📲 Turn on phone alerts';
   b.className = on ? 'btn sec' : 'btn';
-  n.textContent = on ? 'This device gets a notification with sound for proven alerts that match the filters above, even when Prop Lab is closed. Changing a filter updates it.'
+  n.textContent = on ? 'This device rings even when Prop Lab is closed: two rings for proven strategies and pulled props, one ring for other line moves (if that box is checked). Changing a filter updates it.'
     : isIOS && !isStandalone() ? 'iPhone/iPad: tap Share → Add to Home Screen, open Prop Lab from the new icon, then tap this button (iOS 16.4 or newer).'
     : 'Works on Android, iPhone/iPad (from the home screen icon) and computers. Turn it on once on each device.';
 }
 
 /* ---------- in-app sharp-line alerts (sent by line_alerts.py; only the last hour is shown) ---------- */
 // Each alert is re-checked here against the Strategy lab: moves that fit a proven strategy go on top, the rest are folded away.
-let ALERTS = [], alertTimer = null, alertLast = null;
+let ALERTS = [], alertTimer = null, alertLast = null, alertLastO = null;
 const ALERT_MS = 3600e3;
 function alertEval(a){
   try {
@@ -3447,12 +3449,20 @@ async function loadAlerts(){
     ALERTS = items.filter(a => a && a.t && now - Date.parse(a.t) < ALERT_MS).sort((a,b) => Date.parse(b.t) - Date.parse(a.t));
   } catch(e){ return; }
   const top = ALERTS.filter(alertTop), newest = top[0] ? top[0].t : '';
-  if (alertLast !== null && newest && newest > alertLast) {
-    toast(`\uD83D\uDCE3 Proven-strategy alert: ${top[0].pick}`);
-    try { if (navigator.vibrate) navigator.vibrate([200, 100, 200]); } catch(e){}
-    if (S.alSound) chime();
+  const oth = ALERTS.filter(a => a.kind === 'move' && a.where && a.where.length && !alertTop(a) && alertPass({a, ev: alertEval(a)}) && S.alF.others !== false && S.alF.strat === 'any' && !(S.alF.minWin > 0));
+  const newestO = oth[0] ? oth[0].t : '';
+  const firstRun = alertLast === null;
+  if (!firstRun && newest && newest > alertLast) {
+    toast(`📣 Proven-strategy alert: ${top[0].pick}`);
+    try { if (navigator.vibrate) navigator.vibrate([200, 120, 200]); } catch(e){}
+    if (S.alSound) chime(2);
+  } else if (!firstRun && newestO && newestO > (alertLastO || '')) {
+    toast(`👀 Line move: ${oth[0].pick}`);
+    try { if (navigator.vibrate) navigator.vibrate(200); } catch(e){}
+    if (S.alSound) chime(1);
   }
-  if (alertLast === null || newest > alertLast) alertLast = newest;
+  if (firstRun || newest > alertLast) alertLast = newest;
+  if (firstRun || newestO > (alertLastO || '')) alertLastO = newestO;
   renderAlerts();
 }
 function renderAlerts(){
@@ -3961,15 +3971,16 @@ window.addEventListener('hashchange', () => { if (location.hash === '#alerts') s
 $('#view-alerts').addEventListener('click', e => {
   const f = e.target.closest('[data-alf]'); if (f) { S.alf = f.dataset.alf; renderAlerts(); return; }
   const sd = e.target.closest('#alSide [data-v]'); if (sd) { S.alF.side = sd.dataset.v; saveAlF(S.alF); renderAlerts(); return; }
-  if (e.target.closest('#alSound')) { S.alSound = !S.alSound; lsSet(LSP+'alSound', S.alSound); if (S.alSound) { audio(); chime(); toast('Sound on: you\u2019ll hear a chime for proven alerts while the app is open'); } else toast('Sound off'); renderAlFilters(); return; }
-  if (e.target.closest('#alTest')) { audio(); chime(); return; }
+  if (e.target.closest('#alSound')) { S.alSound = !S.alSound; lsSet(LSP+'alSound', S.alSound); if (S.alSound) { audio(); chime(2); toast('Sound on: 2 beeps for proven strategies, 1 beep for other moves (while the app is open)'); } else toast('Sound off'); renderAlFilters(); return; }
+  if (e.target.closest('#alTest')) { audio(); chime(2); return; }
+  if (e.target.closest('#alTest1')) { audio(); chime(1); return; }
   if (e.target.closest('#pushBtn')) { pushKey() ? pushOff() : pushOn(); return; }
-  if (e.target.closest('#alReset')) { S.alF = {strat:'any', side:'both', stat:'all', minWin:0, mine:false}; saveAlF(S.alF); renderAlerts(); toast('Filters cleared'); return; }
+  if (e.target.closest('#alReset')) { S.alF = {strat:'any', side:'both', stat:'all', minWin:0, mine:false, others:true}; saveAlF(S.alF); renderAlerts(); toast('Filters cleared'); return; }
   const al = e.target.closest('[data-alopen]'); if (al) { const [n, k] = al.dataset.alopen.split('|'); const pl = S.players.find(q => q.name === n); if (pl) { if (k && STATS[k]) S.stat = k; selectPlayer(pl.id, true); setTab('analyzer'); } }
 });
 $('#view-alerts').addEventListener('change', e => {
   const t = e.target, F = S.alF;
-  if (t.id === 'alStrat') F.strat = t.value; else if (t.id === 'alStat') F.stat = t.value; else if (t.id === 'alMin') F.minWin = +t.value; else if (t.id === 'alMine') F.mine = t.checked; else return;
+  if (t.id === 'alStrat') F.strat = t.value; else if (t.id === 'alStat') F.stat = t.value; else if (t.id === 'alMin') F.minWin = +t.value; else if (t.id === 'alMine') F.mine = t.checked; else if (t.id === 'alOthers') F.others = t.checked; else return;
   saveAlF(F); renderAlerts();
 });
 $('#alertBox').addEventListener('toggle', e => { if (e.target.matches('details.alerts')) S.alertOpen = e.target.open; }, true);
