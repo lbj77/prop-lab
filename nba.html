@@ -633,6 +633,24 @@ details.bb[open] .bb-more{opacity:.6}
 .gotab-row .ghost{width:auto}
 .inj-intro{font-size:16px}
 main{padding-bottom:90px}
+.bb-badge.r{background:var(--under-soft);color:var(--under)}
+details.alerts{margin-bottom:14px;border-color:var(--warn)}
+details.alerts summary{cursor:pointer;font-size:18px}
+.al{border:1px solid var(--line);border-left:5px solid var(--warn);border-radius:12px;padding:12px;margin-top:10px;background:var(--panel2)}
+.al.g{border-left-color:var(--over)} .al.r{border-left-color:var(--under)}
+.al.new{box-shadow:0 0 0 1px var(--warn)}
+.al-h{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.al-pick{font-family:var(--cond);font-weight:800;font-size:23px;margin-top:6px;line-height:1.15}
+.al-l{font-size:15px;margin-top:5px;line-height:1.4}
+.al-open{margin-top:10px;width:auto}
+.tab .count.adot{background:var(--warn)}
+.al.sm{padding:10px 12px;border-left-width:3px}
+.al.sm .al-h b{font-size:16px}
+.al.moved{border-left-color:var(--push);opacity:.85}
+.al-rest{margin-top:12px}
+.al-rest summary{cursor:pointer;font-weight:700}
+
+
 
 .fab span{color:var(--on-accent);opacity:.75}
 
@@ -806,6 +824,7 @@ details.inj{margin-top:22px!important}
     <div class="data-badge" id="dataBadge"><i class="dot"></i><span>Loading…</span></div>
     <nav class="tabs" role="tablist" aria-label="Sections">
       <button class="tab" role="tab" data-tab="today" aria-selected="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 6.5 7 .8-5.2 4.8 1.4 7L12 17.8 5.8 21l1.4-7L2 9.3l7-.8z"/></svg><span>Today</span></button>
+      <button class="tab" role="tab" data-tab="alerts" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg><span>Alerts</span></button>
       <button class="tab" role="tab" data-tab="injuries" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="4"/><path d="M12 8v8M8 12h8"/></svg><span>Injuries</span></button>
       <button class="tab" role="tab" data-tab="games" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="14" rx="2"/><path d="M12 4v14M7 9v4M17 9v4M8 21h8"/></svg><span>Games</span></button>
       <button class="tab" role="tab" data-tab="finder" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg><span>Odds</span></button>
@@ -838,6 +857,7 @@ details.inj{margin-top:22px!important}
 
   <!-- TODAY -->
   <section class="view" id="view-today">
+    <div id="alertBox"></div>
     <div class="panel">
       <h2>Best bets today</h2>
       <p class="sub" id="bbSub" style="margin-bottom:6px"></p>
@@ -880,6 +900,16 @@ details.inj{margin-top:22px!important}
       <div class="tbl-wrap"><table id="todayTbl"></table></div>
     </div>
     </div>
+  </section>
+
+  <!-- ALERTS -->
+  <section class="view" id="view-alerts" hidden>
+    <div class="panel">
+      <h2>Alerts</h2>
+      <p class="sub" id="alSub">Every sharp line move from the last hour. Proven-strategy moves come first. Alerts disappear after an hour so the list stays fresh.</p>
+      <div class="seg" id="alFilter"><button data-alf="all">All</button><button data-alf="top">Proven</button><button data-alf="other">Other moves</button><button data-alf="pulled">Pulled</button></div>
+    </div>
+    <div id="alertList"></div>
   </section>
 
   <!-- INJURIES -->
@@ -3224,6 +3254,103 @@ function renderToday(){
 }
 
 
+
+/* ---------- in-app sharp-line alerts (sent by line_alerts.py; only the last hour is shown) ---------- */
+// Each alert is re-checked here against the Strategy lab: moves that fit a proven strategy go on top, the rest are folded away.
+let ALERTS = [], alertTimer = null, alertLast = null;
+const ALERT_MS = 3600e3;
+function alertEval(a){
+  try {
+    if (a.kind === 'pulled') return null;
+    const p = a.name && S.players.find(q => q.name === a.name);
+    if (!p || !a.stat || !STATS[a.stat] || !a.side || a.line == null || !isFinite(+a.line)) return null;
+    const line = +a.line, side = a.side;
+    let odds = null;
+    entries(p, a.stat).filter(e => e.line === line).forEach(e => { const v = priceOf(e, side); if (v != null && (odds == null || amToDec(v) > amToDec(odds))) odds = v; });
+    if (odds == null) odds = -110;
+    const r = evalProp(p, a.stat, line, side), x = {p, k:a.stat, line, side, odds, r, edge: r.prob - implied(odds), score: r.score, book:true};
+    const R = stratRecords(), fits = LAB.filter(st => st.t && st.t(x)), user = stratOn();
+    let st = null, proven = false;
+    if (user) { if (user.t && user.t(x)) { st = user; proven = true; } }
+    else {
+      const pv = fits.filter(s => R[s.id] && isProven(R[s.id])).sort((s1, s2) => R[s2.id].roi - R[s1.id].roi);
+      const ok = fits.filter(s => R[s.id] && R[s.id].n >= OK_N && R[s.id].roi > 0).sort((s1, s2) => R[s2.id].roi - R[s1.id].roi);
+      st = pv[0] || ok[0] || null; proven = !!pv[0];
+    }
+    return {x, fits, st, proven, agree: r.prob >= .5};
+  } catch(e){ return null; }
+}
+const alertTop = a => a.kind === 'pulled' || (a.kind !== 'moved' && !!(alertEval(a) || {}).proven);
+async function loadAlerts(){
+  if (!sharedDb) return;
+  try {
+    const snap = await sharedDb.doc('public/alerts').get();
+    const items = snap && snap.exists ? ((typeof snap.data === 'function' ? snap.data() : snap.data) || {}).items || [] : [];
+    const now = Date.now();
+    ALERTS = items.filter(a => a && a.t && now - Date.parse(a.t) < ALERT_MS).sort((a,b) => Date.parse(b.t) - Date.parse(a.t));
+  } catch(e){ return; }
+  const top = ALERTS.filter(alertTop), newest = top[0] ? top[0].t : '';
+  if (alertLast !== null && newest && newest > alertLast) {
+    toast(`📣 Proven-strategy alert: ${top[0].pick}`);
+    try { if (navigator.vibrate) navigator.vibrate(200); } catch(e){}
+  }
+  if (alertLast === null || newest > alertLast) alertLast = newest;
+  renderAlerts();
+}
+function renderAlerts(){
+  const box = $('#alertBox'); if (!box) return;
+  const now = Date.now(); ALERTS = ALERTS.filter(a => now - Date.parse(a.t) < ALERT_MS);
+  const seen = lsGet(LSP+'alertSeen') || '';
+  const top = [], rest = [];
+  ALERTS.forEach(a => { const ev = alertEval(a); (a.kind === 'pulled' || (a.kind !== 'moved' && ev && ev.proven) ? top : rest).push({a, ev}); });
+  const unseen = top.filter(o => o.a.t > seen).length;
+  const tb = $('.tab[data-tab="alerts"]');
+  if (tb) { let d = tb.querySelector('.adot'); if (unseen && S.tab !== 'today' && S.tab !== 'alerts') { if (!d) { d = document.createElement('span'); d.className = 'count adot'; tb.appendChild(d); } d.textContent = unseen; } else if (d) d.remove(); }
+  const ago = t => { const m = Math.max(0, Math.round((now - Date.parse(t))/60000)); return m < 1 ? 'just now' : `${m} min ago`; };
+  const open = (a) => a.name && S.players.some(p => p.name === a.name) ? `<button class="ghost al-open" data-alopen="${esc(a.name)}|${esc(a.stat || '')}">See player</button>` : '';
+  const big = ({a, ev}) => {
+    if (a.kind === 'pulled') return `<div class="al r ${a.t > seen ? 'new' : ''}"><div class="al-h"><span class="bb-badge r">🚨 PROPS PULLED</span><span class="meta">${ago(a.t)}</span></div>
+      <div class="al-pick">${esc(a.pick || '')}</div>${a.note ? `<div class="al-l">➡️ ${esc(a.note)}</div>` : ''}<button class="ghost al-open" data-gotab="injuries">Open Injuries</button></div>`;
+    const x = ev.x, rec = recFor(ev.st), steep = x.odds < -250, tone = ev.agree && !steep ? 'g' : 'y';
+    const also = ev.fits.filter(s => s.id !== ev.st.id && s.id !== 'all');
+    return `<div class="al ${tone} ${a.t > seen ? 'new' : ''}">
+      <div class="al-h"><span class="bb-badge ${tone}">${tone === 'g' ? '🟢 BET IT' : '🟡 SMALL BET'}</span><span class="meta">${ago(a.t)}</span></div>
+      <div class="al-pick ${a.side === 'over' ? 'side-o' : 'side-u'}">${esc(a.name)} ${a.side === 'over' ? 'OVER' : 'UNDER'} ${esc(String(a.line))} ${esc(statWord(a.stat))} <span class="meta" style="font-size:15px">${esc(a.team || '')}</span></div>
+      <div class="al-l"><b>${esc(whyText(ev.st.id, x))}.</b>${rec.n ? ` Picks like this won <b>${pct(rec.wp)}</b> of ${rec.n}.` : ''}</div>
+      ${a.where && a.where.length ? `<div class="al-l">📍 <b>Where:</b> ${esc(a.where.join(', '))}</div>` : ''}
+      ${a.why ? `<div class="al-l">📈 <b>Why:</b> ${esc(a.why)}</div>` : ''}
+      <div class="al-l">🏆 ${esc(ev.st.n)}${also.length ? `, also ${also.map(s => esc(s.n)).join(', ')}` : ''}</div>
+      <div class="al-l">🧪 ${ev.agree ? 'Our model agrees' : 'Our model leans the other way'}: ${pct(x.r.prob)} chance it hits${steep ? '. Price is steep, bet small.' : ''}</div>
+      ${open(a)}</div>`;
+  };
+  const small = ({a, ev}) => {
+    const t = a.tone === 'g' ? 'g' : a.tone === 'r' ? 'r' : 'y';
+    const why = ev && ev.st ? `Fits ${esc(ev.st.n)} (not proven yet)` : ev ? 'No winning strategy behind it' : 'Not in today’s Prop Lab';
+    return `<div class="al sm ${a.kind === 'moved' ? 'moved' : t}">
+      <div class="al-h"><b class="${a.side === 'over' ? 'side-o' : a.side === 'under' ? 'side-u' : ''}">${esc(a.pick || '')}</b><span class="meta">${ago(a.t)}</span></div>
+      <div class="al-l meta">${a.why ? `📈 ${esc(a.why)}. ` : ''}${a.kind === 'moved' ? 'Already moved on every app.' : a.where && a.where.length ? `📍 Old number at ${esc(a.where.join(', '))}.` : ''} ${why}.</div>${S.tab === 'alerts' ? open(a) : ''}</div>`;
+  };
+  const unseenTop = unseen;
+  // Today: proven moves only, with a link to the full list
+  box.innerHTML = top.length || rest.length ? `<details class="panel alerts" ${S.alertOpen === false ? '' : 'open'}><summary><b>📣 Sharp money moves</b> <span class="meta">${top.length ? `${top.length} fit${top.length === 1 ? 's' : ''} a proven strategy` : 'none fit a proven strategy'}${unseenTop ? `, <b style="color:var(--warn)">${unseenTop} new</b>` : ''}</span></summary>
+    ${top.length ? top.slice(0, 5).map(big).join('') : '<div class="meta" style="margin-top:10px">No sharp move in the last hour fits a proven strategy.</div>'}
+    <button class="btn sec bb-moreb" data-gotab="alerts">See all ${ALERTS.length} alert${ALERTS.length === 1 ? '' : 's'} →</button>
+  </details>` : '';
+  // Alerts tab: everything, filtered
+  const list = $('#alertList');
+  if (list) {
+    const f = S.alf || 'all';
+    $$('#alFilter button').forEach(b => b.setAttribute('aria-pressed', b.dataset.alf === f));
+    const pulled = top.filter(o => o.a.kind === 'pulled'), proven = top.filter(o => o.a.kind !== 'pulled');
+    const sec = (title, arr, fn) => arr.length ? `<h2 class="sec-h">${title} <span class="meta" style="font-size:16px">(${arr.length})</span></h2>${arr.map(fn).join('')}` : '';
+    const html = (f === 'all' || f === 'pulled' ? sec('🚨 Props pulled', pulled, big) : '')
+      + (f === 'all' || f === 'top' ? sec('🏆 Fits a proven strategy', proven, big) : '')
+      + (f === 'all' || f === 'other' ? sec('👀 Other line moves', rest, small) : '');
+    list.innerHTML = html || `<div class="panel" style="margin-top:14px"><div class="empty"><b>No alerts${f === 'all' ? '' : ' here'} in the last hour</b>The line checker runs every 10 minutes from 7 AM to 7 PM.</div></div>`;
+  }
+  if ((S.tab === 'today' || S.tab === 'alerts') && unseen) setTimeout(() => { if ((S.tab === 'today' || S.tab === 'alerts') && top[0]) lsSet(LSP+'alertSeen', top[0].a.t); }, 4000);
+}
+
 /* ---------- Best bets: simple verdict cards backed by the Strategy lab record ---------- */
 let bbRows = [], bbMore = false, SREC = {key:'', v:{}};
 const PROVEN_N = 300, OK_N = 100;
@@ -3645,9 +3772,9 @@ function attachSearch(inp, onPick){
 function setTab(t){
   S.tab = t;
   $$('.tab').forEach(b => b.setAttribute('aria-selected', b.dataset.tab===t || (t==='defense' && b.dataset.tab==='finder')));
-  ['today','injuries','analyzer','finder','defense','games','parlay','tracker'].forEach(v => $('#view-'+v).hidden = v!==t);
+  ['today','alerts','injuries','analyzer','finder','defense','games','parlay','tracker'].forEach(v => $('#view-'+v).hidden = v!==t);
   if (t === 'tracker') matchesOpen = false;
-  renderAll(); window.scrollTo({top:0});
+  renderAll(); renderAlerts(); window.scrollTo({top:0});
   if (t === 'tracker') { setTimeout(autoGrade, 100); setTimeout(labSync, 300); }
   if (t === 'games') { renderGames(); if (sharedDb) loadGames(); }
 }
@@ -3666,6 +3793,11 @@ function renderAll(){
 /* ---------- events ---------- */
 $$('.tab').forEach(b => b.addEventListener('click', () => setTab(b.dataset.tab)));
 $('#fab').addEventListener('click', () => setTab('parlay'));
+$('#view-alerts').addEventListener('click', e => {
+  const f = e.target.closest('[data-alf]'); if (f) { S.alf = f.dataset.alf; renderAlerts(); return; }
+  const al = e.target.closest('[data-alopen]'); if (al) { const [n, k] = al.dataset.alopen.split('|'); const pl = S.players.find(q => q.name === n); if (pl) { if (k && STATS[k]) S.stat = k; selectPlayer(pl.id, true); setTab('analyzer'); } }
+});
+$('#alertBox').addEventListener('toggle', e => { if (e.target.matches('details.alerts')) S.alertOpen = e.target.open; }, true);
 document.addEventListener('click', e => { const g = e.target.closest('[data-gotab]'); if (g) { e.preventDefault(); setTab(g.dataset.gotab); } });
 $('#dataBtn').addEventListener('click', () => { renderRunReport(); const d=$('#drawer'); d.hidden=!d.hidden; $('#dataBtn').setAttribute('aria-expanded', !d.hidden); });
 $('#playerIn').addEventListener('change', e => { const v = e.target.value.trim().toLowerCase(); const p = S.players.find(x=>x.name.toLowerCase()===v) || S.players.find(x=>x.name.toLowerCase().includes(v)); if (p) selectPlayer(p.id); });
@@ -3716,6 +3848,7 @@ $('#fBuild').addEventListener('click', e => { const b = e.target.closest('button
 $('#fCorr').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; S.f.corr = b.dataset.v; saveF(); $$('#fCorr button').forEach(x => x.setAttribute('aria-pressed', x === b)); });
 $('#fTarget').addEventListener('change', e => { S.f.target = +e.target.value; saveF(); });
 $('#view-today').addEventListener('click', e => {
+  const al = e.target.closest('[data-alopen]'); if (al) { const [n, k] = al.dataset.alopen.split('|'); const pl = S.players.find(q => q.name === n); if (pl) { if (k && STATS[k]) S.stat = k; selectPlayer(pl.id, true); setTab('analyzer'); } return; }
   const ba = e.target.closest('[data-bbadd]'); if (ba) { const x = bbRows[+ba.dataset.bbadd]; toggleX(x); ba.textContent = inSlipX(x) ? '\u2713 In your parlay' : '+ Add to parlay'; renderSlipBadges(); return; }
   const bo = e.target.closest('[data-bbopen]'); if (bo) { openX(bbRows[+bo.dataset.bbopen]); return; }
   const bm = e.target.closest('[data-bbmore]'); if (bm) { bbMore = true; renderBest(); return; }
@@ -4060,6 +4193,8 @@ $('#shareChk').addEventListener('change', async e => {
     sharedDb = db;
     viewerIsOwner = user ? !!(await user.isOwner()) : false;
     cloudReadyResolve();
+    loadAlerts(); if (!alertTimer) alertTimer = setInterval(loadAlerts, 60000);
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) loadAlerts(); });
     renderBadge();
     setTimeout(() => { if (S.data && S.source !== 'sample') labSync(); }, 800);
     loadGames();   // load the Strategy lab as soon as the account is connected
