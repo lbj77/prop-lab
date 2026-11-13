@@ -598,6 +598,42 @@ tr.bd-out td{opacity:.45}
 /* Floating slip */
 .fab{position:fixed;right:16px;bottom:calc(16px + env(safe-area-inset-bottom,0px));z-index:30;background:var(--ball);color:var(--on-accent);border:0;border-radius:999px;padding:12px 18px;font-family:var(--cond);font-weight:700;font-size:18px;box-shadow:0 6px 20px rgba(10,20,40,.28)}
 .fab[hidden]{display:none}
+/* ---------- simple redesign ---------- */
+.tab[hidden]{display:none!important}
+.bb-key{display:flex;gap:16px;flex-wrap:wrap;font-size:15px;color:var(--muted);margin-top:8px}
+.bb-list{display:grid;gap:12px;margin-top:14px}
+@media(min-width:900px){.bb-list{grid-template-columns:1fr 1fr}}
+details.bb{background:var(--panel);border:1px solid var(--line);border-left:6px solid var(--warn);border-radius:16px}
+details.bb.g{border-left-color:var(--over)}
+details.bb.top{border-color:var(--over);box-shadow:0 0 0 1px var(--over)}
+details.bb summary{list-style:none;cursor:pointer;padding:16px 16px 12px}
+details.bb summary::-webkit-details-marker{display:none}
+.bb-star{font-weight:800;color:var(--warn);font-size:15px;margin-bottom:8px}
+.bb-row1{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.bb-badge{font-family:var(--cond);font-weight:800;font-size:15px;padding:4px 12px;border-radius:999px;letter-spacing:.4px}
+.bb-badge.g{background:var(--over-soft);color:var(--over)} .bb-badge.y{background:var(--warn-soft);color:var(--warn)}
+.bb-who b{font-size:19px}
+.bb-bet{font-family:var(--cond);font-weight:800;font-size:32px;line-height:1.1;margin-top:8px}
+.bb-why{font-size:17px;margin-top:6px;color:var(--ink);line-height:1.4}
+.bb-foot{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:10px;font-size:15px}
+.bb-more{color:var(--ball);font-weight:700;white-space:nowrap}
+details.bb[open] .bb-more{opacity:.6}
+.bb-body{padding:4px 16px 16px;border-top:1px solid var(--line)}
+.bb-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:12px}
+@media(max-width:560px){.bb-stats{grid-template-columns:1fr 1fr}}
+.bb-stats div{background:var(--panel2);border-radius:10px;padding:10px 12px}
+.bb-stats span{display:block;font-size:13px;color:var(--muted)}
+.bb-stats b{font-size:22px;font-family:var(--cond)}
+.bb-body .tk{margin-top:10px}
+.bb-strat,.bb-note{font-size:15px;margin-top:10px;line-height:1.45;color:var(--muted)}
+.bb-note{color:var(--warn)}
+.bb-btns{display:flex;gap:8px;margin-top:14px} .bb-btns .btn{flex:1;width:auto}
+.bb-moreb{margin-top:12px;width:100%}
+.gotab-row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.gotab-row .ghost{width:auto}
+.inj-intro{font-size:16px}
+main{padding-bottom:90px}
+
 .fab span{color:var(--on-accent);opacity:.75}
 
 /* Data drawer */
@@ -770,12 +806,13 @@ details.inj{margin-top:22px!important}
     <div class="data-badge" id="dataBadge"><i class="dot"></i><span>Loading…</span></div>
     <nav class="tabs" role="tablist" aria-label="Sections">
       <button class="tab" role="tab" data-tab="today" aria-selected="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 6.5 7 .8-5.2 4.8 1.4 7L12 17.8 5.8 21l1.4-7L2 9.3l7-.8z"/></svg><span>Today</span></button>
-      <button class="tab" role="tab" data-tab="analyzer" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg><span>Analyzer</span></button>
-      <button class="tab" role="tab" data-tab="finder" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg><span>Finder</span></button>
-      <button class="tab" role="tab" data-tab="defense" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l8 3v6c0 5-3.4 9.3-8 11-4.6-1.7-8-6-8-11V5z"/></svg><span>Defense</span></button>
+      <button class="tab" role="tab" data-tab="injuries" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="4"/><path d="M12 8v8M8 12h8"/></svg><span>Injuries</span></button>
       <button class="tab" role="tab" data-tab="games" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="14" rx="2"/><path d="M12 4v14M7 9v4M17 9v4M8 21h8"/></svg><span>Games</span></button>
-      <button class="tab" role="tab" data-tab="parlay" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l9 5-9 5-9-5z"/><path d="M3 13l9 5 9-5"/></svg><span>Parlay</span> <span class="count" id="tabCount" hidden>0</span></button>
-      <button class="tab" role="tab" data-tab="tracker" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/></svg><span>Tracker</span></button>
+      <button class="tab" role="tab" data-tab="finder" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg><span>Odds</span></button>
+      <button class="tab" role="tab" data-tab="analyzer" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg><span>Player</span></button>
+      <button class="tab" role="tab" data-tab="tracker" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/></svg><span>Results</span></button>
+      <button class="tab" hidden role="tab" data-tab="parlay" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l9 5-9 5-9-5z"/><path d="M3 13l9 5 9-5"/></svg><span>Parlay</span> <span class="count" id="tabCount" hidden>0</span></button>
+      <button class="tab" hidden role="tab" data-tab="defense" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l8 3v6c0 5-3.4 9.3-8 11-4.6-1.7-8-6-8-11V5z"/></svg><span>Defense</span></button>
     </nav>
   </div>
 </header>
@@ -802,11 +839,18 @@ details.inj{margin-top:22px!important}
   <!-- TODAY -->
   <section class="view" id="view-today">
     <div class="panel">
+      <h2>Best bets today</h2>
+      <p class="sub" id="bbSub" style="margin-bottom:6px"></p>
+      <div class="chips" id="dayChips" style="margin-top:8px"></div>
+      <div class="bb-key"><span>🟢 <b>Bet it</b>: proven winner</span><span>🟡 <b>Small bet</b>: looks good, not proven yet</span><span>Tap a pick for details</span></div>
+    </div>
+    <div class="bb-list" id="bestBets"></div>
+    <div id="bbMoreWrap"></div>
+    <div id="oldToday" hidden>
+    <div class="panel">
       <h2>Today’s best props</h2>
       <p class="sub" id="todaySub" style="margin-bottom:6px"></p>
-      <div class="chips" id="dayChips" style="margin-bottom:8px"></div>
-      <div class="stratbar"><label class="f" for="stratSel" style="margin:0">Strategy</label><select class="ghost" id="stratSel"></select><span class="gpick" data-gpick></span><span class="meta" id="stratNote"></span></div>
-      <div id="injImpact"></div>
+      
       <details class="fold">
         <summary>Pick settings</summary>
         <div class="set-grid">
@@ -822,9 +866,6 @@ details.inj{margin-top:22px!important}
     <h2 class="sec-h">One pick per game</h2>
     <p class="meta" style="margin:0">The best-value player in each matchup, with his best side on every stat. Tap a line to add it to your parlay.</p>
     <div class="mpicks" id="mpicks"></div>
-    <h2 class="sec-h">Stale lines vs the sharp market</h2>
-    <p class="meta" style="margin:0;max-width:85ch" id="staleSub">Lines your apps haven’t moved yet, compared with Pinnacle’s fair price. Tap one to add it to your parlay.</p>
-    <div class="prows stalelist" id="stale"></div>
     <h2 class="sec-h">Hot and cold streaks</h2>
     <p class="meta" style="margin:0">Props a player has cleared game after game at today’s book line. Tap one to add it.</p>
     <div class="oddsbox" data-oddsbox></div>
@@ -838,7 +879,17 @@ details.inj{margin-top:22px!important}
       <p class="sub">Each player’s strongest prop and the reasons behind it.</p>
       <div class="tbl-wrap"><table id="todayTbl"></table></div>
     </div>
-    <details class="panel fold inj" style="margin-top:14px" id="injPanel">
+    </div>
+  </section>
+
+  <!-- INJURIES -->
+  <section class="view" id="view-injuries" hidden>
+    <div class="panel">
+      <h2>Injuries</h2>
+      <p class="sub inj-intro">Who is out, and which teammates to bet on because of it. Heard news before the books? Mark the player out and every pick updates.</p>
+      <div id="injImpact"></div>
+    </div>
+    <details class="panel fold inj" style="margin-top:14px" id="injPanel" open>
       <summary id="injSum">Injuries</summary>
       <p class="sub" id="injSub" style="margin-top:10px"></p>
       <div class="chips" id="injOut"></div>
@@ -949,6 +1000,7 @@ details.inj{margin-top:22px!important}
 
   <!-- FINDER -->
   <section class="view" id="view-finder" hidden>
+    <div class="gotab-row"><button class="ghost" data-gotab="defense">🛡 Defense matchups</button></div>
     <div class="panel" id="boardPanel">
       <div class="bd-hd"><h2 style="margin:0">Odds board</h2><div class="seg" id="fMode"><button data-fm="board">Odds board</button><button data-fm="finder">Prop finder</button></div></div>
       <p class="sub" id="boardSub">Every book side by side with our projection and the edge on each side. Green = the best edge for that side. Flip injuries below and the whole board re-projects.</p>
@@ -984,10 +1036,16 @@ details.inj{margin-top:22px!important}
       <div class="tbl-wrap"><table id="finderTbl"></table></div>
       <div class="empty" id="finderEmpty" hidden><b>Nothing clears those bars</b>Lower the hit-rate or model-chance sliders, or add more stats.</div>
     </div>
+    <details class="panel fold" style="margin-top:14px">
+      <summary>Stale lines: apps that haven’t caught up to the sharp price</summary>
+        <p class="meta" style="margin:0;max-width:85ch" id="staleSub">Lines your apps haven’t moved yet, compared with Pinnacle’s fair price. Tap one to add it to your parlay.</p>
+    <div class="prows stalelist" id="stale"></div>
+    </details>
   </section>
 
   <!-- DEFENSE -->
   <section class="view" id="view-defense" hidden>
+    <div class="gotab-row"><button class="ghost" data-gotab="finder">← Back to Odds</button></div>
     <div class="panel">
       <h2>Head to head</h2>
       <p class="sub" id="h2hSub"></p>
@@ -1059,7 +1117,7 @@ details.inj{margin-top:22px!important}
   <!-- TRACKER -->
   <section class="view" id="view-tracker" hidden>
     <div class="panel">
-      <h2>Tracker</h2>
+      <h2>Your bets</h2>
       <p class="sub" id="trackSub">Mark each saved parlay as it settles to see whether the model’s chances hold up.</p>
       <div class="stats4" id="trackStats"></div>
       <div class="chart-box sm"><canvas id="pnlChart" aria-label="Profit over time"></canvas></div>
@@ -1077,24 +1135,27 @@ details.inj{margin-top:22px!important}
     <div class="panel" style="margin-top:14px" id="labPanel">
       <h2>Strategy lab</h2>
       <p class="sub" id="labSub">Every day, Prop Lab records each player’s main lean on every stat, notes which strategies flag it, and grades it once the box scores come in. Stick with whatever wins.</p>
+      <div class="stratbar"><label class="f" for="stratSel" style="margin:0">Best bets use</label><select class="ghost" id="stratSel"></select><span class="meta" id="stratNote"></span></div>
       <div id="stratMatches"></div>
       <div class="ctrl-row"><div class="seg" id="labPer"><button data-lp="7">Last 7 days</button><button data-lp="30">Last 30 days</button><button data-lp="0">All time</button></div><span class="meta" id="labInfo"></span></div>
       <div class="tbl-wrap"><table id="labTbl" class="res lab"></table></div>
-      <h3 class="sec-h" style="font-size:20px;margin-top:22px">Best combinations</h3>
+      <details class="fold" style="margin-top:18px"><summary>More: best combinations and how many strategies agree</summary>
+      <h3 class="sec-h" style="font-size:20px;margin-top:16px">Best combinations</h3>
       <p class="meta" style="margin:0 0 8px">Pairs and trios of strategies, counted only when they all flag the same prop. <b>By grade</b> splits each record by Prop Lab’s A–D grade, so you can see whether the A’s are carrying a strategy while the C’s drag it down. Tap Use to filter your picks by it.</p>
       <div class="ctrl-row"><div class="seg" id="comboAll"><button data-ca="false">Top 10</button><button data-ca="true">Show all</button></div><span class="mini" style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted)">Min picks <span class="seg" id="comboMin"><button data-cm="1">1</button><button data-cm="12">12</button><button data-cm="30">30</button></span></span><span class="meta" id="comboCount"></span></div>
       <div class="tbl-wrap combo-wrap"><table id="comboTbl" class="res lab"></table></div>
       <h3 class="sec-h" style="font-size:20px;margin-top:22px">Confluence: how many agree</h3>
       <p class="meta" style="margin:0 0 8px">Win rate by how many of the tracked strategies flagged the same prop.</p>
       <div class="tbl-wrap"><table id="confTbl" class="res lab"></table></div>
+      </details>
     </div>
-    <div class="panel" style="margin-top:14px" id="calPanel">
-      <h2>Model report card</h2>
+    <details class="panel fold" style="margin-top:14px" id="calPanel">
+      <summary>More: model report card and learning model</summary>
       <p class="sub">Is the model honest? When it says 70%, do those props actually hit about 70% of the time? Graded from every lean in the Strategy lab.</p>
       <div class="stats4" id="calStats"></div>
       <div class="tbl-wrap"><table id="calTbl" class="res cal"></table></div>
       <div id="calFix" class="calfix"></div>
-    </div>
+    </details>
     <div class="panel" style="margin-top:14px">
       <h2>Saved parlays</h2>
       <div id="slipList" style="margin-top:10px"></div>
@@ -1540,7 +1601,7 @@ function renderInjury(){
   const outs = S.players.filter(p => isOut(p.id));
   const q = S.players.filter(p => !isOut(p.id) && p.status && !/^(active|available)/i.test(p.status));
   const hasStatus = S.players.some(p => p.status);
-  $('#injSum').innerHTML = `Injuries <span class="cnt">${outs.length ? `${outs.length} out${q.length ? `, ${q.length} questionable` : ''}` : q.length ? `${q.length} questionable` : 'none marked'}</span>`;
+  $('#injSum').innerHTML = `Who’s out <span class="cnt">${outs.length ? `${outs.length} out${q.length ? `, ${q.length} questionable` : ''}` : q.length ? `${q.length} questionable` : 'none marked'}</span>`;
   $('#injSub').textContent = outs.length ? `${outs.length} player${outs.length>1?'s':''} out. They’re left out of the picks, and their teammates get a boost. Tap a name to put him back in.`
     : hasStatus ? 'Nobody is listed out. Tap a questionable player to mark them out.' : 'This file has no injury report. Mark players out yourself, or re-run the script, which pulls the report for you.';
   $('#injOut').innerHTML = outs.map(p => `<button class="chip" aria-pressed="true" data-tog="${esc(p.id)}">${esc(p.name)} (${esc(p.team)}) out ✕</button>`).join('')
@@ -1977,15 +2038,17 @@ function legEval(l){ const p = S.byId[l.pid]; if (!p) return null; return evalPr
 function renderSlipBadges(){
   const n = S.slip.length; const c = $('#tabCount'); c.hidden = !n; c.textContent = n;
   const fab = $('#fab');
-  if (!n || S.tab==='parlay') { fab.hidden = true; return; }
+  if (S.tab==='parlay') { fab.hidden = true; return; }
+  fab.hidden = false;
+  if (!n) { fab.innerHTML = 'Parlay'; return; }
   const dec = slipDec(S.slip);
-  fab.hidden = false; fab.innerHTML = `Parlay: ${n} leg${n>1?'s':''} <span>${fmtOdds(decToAm(dec))}</span>`;
+  fab.innerHTML = `Parlay: ${n} leg${n>1?'s':''} <span>${fmtOdds(decToAm(dec))}</span>`;
 }
 function renderParlay(){
   $('#payEd').innerHTML = [2,3,4,5,6].map(n => `<label>${n} picks <input class="num" type="number" step="0.5" min="1" data-pay="${n}" value="${S.pay[n]}">x</label>`).join('');
   const box = $('#legs');
   if (!S.slip.length) {
-    box.innerHTML = `<div class="empty"><b>No legs yet</b>Add props from the Analyzer, or let the Prop finder build one for you.</div>`;
+    box.innerHTML = `<div class="empty"><b>No legs yet</b>Add props from Best bets or the Player tab, or let the Prop finder build one for you.</div>`;
     $('#parlayStats').innerHTML=''; $('#parlayNotes').innerHTML=''; mk('legChart',{type:'bar',data:{labels:[],datasets:[]},options:chartBase()}); $('#saveSlip').disabled=true; return;
   }
   $('#saveSlip').disabled = false;
@@ -2174,7 +2237,7 @@ function markOut(id){
   if (isOut(id)) { setInj(id, S.outMan && S.outMan[id] === true ? 'auto' : 'in'); toast(`${p.name} back in`); }
   else { setInj(id, 'out'); toast(`${p.name} marked out. Teammates re-projected.`); }
   renderAll();
-  setTimeout(() => { const i = $('#outSearch'); if (i && S.tab === 'today') { i.value = ''; } }, 0);
+  setTimeout(() => { const i = $('#outSearch'); if (i && (S.tab === 'today' || S.tab === 'injuries')) { i.value = ''; } }, 0);
 }
 function renderAnInj(){
   const el = $('#anInj'); if (!el) return; anRows = [];
@@ -2495,9 +2558,11 @@ function renderStratSel(){
   const ls = labStats(extraIds);
   const opts = LAB.concat(extraIds.map(stratById)).map(st => { const o = ls[st.id], n = o.w + o.l; return `<option value="${st.id}" ${(S.strat||'all')===st.id?'selected':''}>${st.id==='all'?'All props (no filter)':esc(st.n)}${n ? ` \u2014 ${Math.round(o.w/n*100)}% of ${n}` : ''}</option>`; }).join('');
   ['#stratSel','#stratSel2','#fStrat'].forEach(id => { const el = $(id); if (el) el.innerHTML = opts; });
+  { const s1 = $('#stratSel'); if (s1 && s1.options[0]) s1.options[0].text = 'Automatic: every strategy that makes money'; }
   renderGradePicks();
+  if (S.tab === 'today') setTimeout(renderBest, 0);
   const st = stratOn(), o = st && ls[st.id], n = o ? o.w + o.l : 0;
-  $('#stratNote').textContent = (st ? `${st.d}.${n ? ` Lab record: ${o.w}\u2013${o.l} (${Math.round(o.w/n*100)}%).` : ' No lab results yet.'} ` : '') + (gradeOn() ? `Only grade ${S.grades.join(' or ')} picks. ` : '') + (filterOn() ? 'Picks, streaks and parlays below only use props that fit.' : 'Pick a strategy or grades to only see props that fit.');
+  $('#stratNote').textContent = (st ? `${st.d}.${n ? ` Lab record: ${o.w}\u2013${o.l} (${Math.round(o.w/n*100)}%).` : ' No lab results yet.'} ` : '') + (gradeOn() ? `Only grade ${S.grades.join(' or ')} picks. ` : '') + (filterOn() ? 'Best bets, the Odds finder and the Player tab only show props that fit.' : 'Automatic: Best bets use every strategy with a winning record, proven ones first.');
 }
 function analyzerX(){
   const p = S.byId[S.pid]; if (!p) return null;
@@ -3046,7 +3111,7 @@ function playerValue(list){ const good = list.filter(x => evOf(x) > 0).map(hitSc
 function propRow(x, best, arr = propRows, attr = 'xadd', showName = false){
   const i = arr.push(x) - 1, ev = evOf(x);
   return `<button class="prow ${showName?'named':''} ${best?'best':''} ${inSlipX(x)?'on':''}" data-${attr}="${i}"><span class="pk">${esc(x.k)}</span>
-    <span class="pick">${showName ? `<span class="pn">${esc(x.p.name)} <span class="meta">${esc(x.p.team)}${x.p.pos ? `, ${esc(x.p.pos)}` : ''}</span></span>` : ''}<b class="${x.side==='over'?'side-o':'side-u'}">${(() => { const g = gradeX(x), o = gradeRates()[g], n = o ? o.w + o.l : 0; return `<span class="gbadge g-${g}" title="Grade ${g}${n ? `: hit ${Math.round(o.w/n*100)}% of ${n} tracked ${S.strat && S.strat !== 'all' ? 'with this strategy' : 'leans'}` : ''}">${g}${n ? ` <small>${Math.round(o.w/n*100)}%</small>` : ''}</span>`; })()}${x.side==='over'?'Over':'Under'} ${x.line}${showName ? ` ${esc(x.k)}` : ''}</b><span class="meta">${esc(priceTxt(x))}, L10 ${x.r.L10.h}/${x.r.L10.h+x.r.L10.m}, score ${hs100(x)}</span>${x.bump ? `<span class="bump">\u25B2 his ${esc(x.k)} projection is up ${f1(x.bump)} with the teammate out</span>` : ''}${histLine(x)}</span>
+    <span class="pick">${showName ? `<span class="pn">${esc(x.p.name)} <span class="meta">${esc(x.p.team)}${x.p.pos ? `, ${esc(x.p.pos)}` : ''}</span></span>` : ''}<b class="${x.side==='over'?'side-o':'side-u'}">${(() => { const g = gradeX(x), o = gradeRates()[g], n = o ? o.w + o.l : 0; return `<span class="gbadge g-${g}" title="Grade ${g}${n ? `: hit ${Math.round(o.w/n*100)}% of ${n} tracked ${S.strat && S.strat !== 'all' ? 'with this strategy' : 'leans'}` : ''}">${g}</span>`; })()}${x.side==='over'?'Over':'Under'} ${x.line}${showName ? ` ${esc(x.k)}` : ''}</b><span class="meta">${esc(priceTxt(x))}, L10 ${x.r.L10.h}/${x.r.L10.h+x.r.L10.m}</span>${x.bump ? `<span class="bump">\u25B2 his ${esc(x.k)} projection is up ${f1(x.bump)} with the teammate out</span>` : ''}</span>
     <span class="pc">${pct(x.r.prob)}</span><span class="ev ${ev>=0?'pos':'neg'}">${ev>=0?'+':''}${(ev*100).toFixed(0)}%</span></button>`;
 }
 function renderPlayerAndGames(){
@@ -3133,7 +3198,7 @@ function renderToday(){
       <div class="reasons">${rs.map(([s,c])=>`<span class="rs ${c==='warn'?'warn':''}">${esc(s)}</span>`).join('')}</div>
     </div>
     <div class="potd-side">
-      <div class="meta">Model chance</div><div class="big pos">${pct(x.r.prob)}</div>
+      <div class="meta">Chance it hits</div><div class="big pos">${pct(x.r.prob)}</div>
       <div class="meta" style="margin-top:6px">Pays ${money(10*amToDec(x.odds))} on $10. Expected profit <b class="${evOf(x)>=0?'pos':'neg'}">${evOf(x)>=0?'+':''}${(evOf(x)*100).toFixed(1)}%</b> per bet.</div>
       <div class="meta" style="margin-top:8px">Last 10, newest first</div><div class="tk" aria-label="${x.r.L10.h} of last ${x.r.L10.h+x.r.L10.m} hit">${tk(x.r.L10)}</div>
       <div style="display:flex;gap:8px;margin-top:14px"><button class="btn" data-padd="1">${inSlipX(x)?'In your parlay':'Add to parlay'}</button><button class="btn sec" data-popen="1" style="width:auto">Open</button></div>
@@ -3156,6 +3221,124 @@ function renderToday(){
       <td class="r">${hpCell(y.r.L5)}</td><td class="r">${hpCell(y.r.L10)}</td><td class="r">${hpCell(y.r.L30)}</td><td class="r">${hpCell(y.r.VS)}</td><td class="r"><b>${pct(y.r.prob)}</b></td>
       <td style="white-space:normal;min-width:200px;font-size:13px">${why.length ? why.slice(0,3).map(w=>`<span class="${w[1]==='warn'?'side-u':''}">${esc(w[0])}</span>`).join('; ') : '—'}</td>
       <td><button class="add ${on?'on':''}" data-radd="${i}" aria-label="Add to parlay">${on?'✓':'+'}</button></td></tr>`; }).join('') + '</tbody>';
+}
+
+
+/* ---------- Best bets: simple verdict cards backed by the Strategy lab record ---------- */
+let bbRows = [], bbMore = false, SREC = {key:'', v:{}};
+const PROVEN_N = 300, OK_N = 100;
+function stratRecords(){
+  const key = labDocs.length + ':' + labDocs.reduce((m,d) => m + (d.res||'').replace(/\./g,'').length, 0);
+  if (SREC.key === key) return SREC.v;
+  const v = {}; LAB.forEach(st => v[st.id] = {w:0, l:0, prof:0});
+  labDocs.forEach(doc => doc.rows.forEach((row, i) => { const r = doc.res && doc.res[i]; if (r !== 'h' && r !== 'm') return;
+    const f = row.split('|'), odds = +f[5];
+    (f[6] || '').split(',').forEach(id => { const o = v[id]; if (!o) return; if (r === 'h') { o.w++; o.prof += isFinite(odds) && odds ? amToDec(odds) - 1 : .87; } else { o.l++; o.prof -= 1; } }); }));
+  Object.values(v).forEach(o => { o.n = o.w + o.l; o.wp = o.n ? o.w/o.n : 0; o.roi = o.n ? o.prof/o.n : 0; });
+  SREC = {key, v}; return v;
+}
+function recFor(st){
+  const R = stratRecords(); if (R[st.id]) return R[st.id];
+  const o = labStats([st.id])[st.id] || {w:0, l:0}, n = o.w + o.l, wp = n ? o.w/n : 0;
+  return {w:o.w, l:o.l, n, wp, roi: n ? wp*1.87 - 1 : 0};
+}
+const isProven = rec => rec.n >= PROVEN_N && rec.roi > .02;
+function bestStrat(){ const R = stratRecords(); return LAB.filter(st => st.t && R[st.id] && isProven(R[st.id])).sort((a,b) => R[b.id].roi - R[a.id].roi)[0] || null; }
+const statWord = k => (NBA ? {'3PM':'threes','PTS':'points','REB':'rebounds','AST':'assists','PRA':'pts + reb + ast','PR':'pts + reb','PA':'pts + ast','RA':'reb + ast'} : {'TD':'touchdowns (anytime)'})[k] || String((STATS[k] || {}).n || k).toLowerCase();
+function whyText(id, x){
+  const r = x.r, opp = x.p.next ? x.p.next.opp : 'them', h = o => `${o.h} of his last ${o.h + o.m}`;
+  switch (id) {
+    case 'l5': return 'Hit in each of his last 5 games';
+    case 'l10': case 'l10def': return `Hit in ${h(r.L10)} games`;
+    case 'l15': return `Hit in ${h(r.L15)} games`;
+    case 'l30': return `Hit in ${h(r.L30)} games`;
+    case 'szn': return `Hit in ${r.ALL.h} of ${r.ALL.h + r.ALL.m} games on file`;
+    case 'h2h': return `Hit in ${r.VS.h} of ${r.VS.h + r.VS.m} games vs ${opp}`;
+    case 'def': return `${opp} ${x.side === 'over' ? 'gives up a lot of' : 'shuts down'} ${statWord(x.k)}`;
+    case 'edge': return `Our chance beats the price by ${Math.round(x.edge*100)}%`;
+    case 'boost': return `A teammate is out, so he gets ${x.side === 'over' ? 'more' : 'less'}`;
+    default: return 'Lots of signs point this way';
+  }
+}
+// the same lean the Strategy lab records: main line, the side the model favors, best price on your apps
+function bbCandidates(){
+  const today = ymd(new Date()), out = [];
+  for (const p of S.players) {
+    if (!p.next || !p.next.date || p.next.date < today || !onDay(p) || isOut(p.id) || !p.lines) continue;
+    for (const k of PICK_STATS.main) {
+      const L = p.lines[k]; if (!L) continue;
+      let es = entries(p, k).filter(e => !e.alt && e.line === L.line);
+      if (S.book !== 'any') es = es.filter(e => e.base === S.book);
+      if (!es.length) continue;
+      const side = evalProp(p, k, L.line, 'over').prob >= .5 ? 'over' : 'under';
+      if (!sideOK(k, L.line, side)) continue;
+      let best = null; es.forEach(e => { const v = priceOf(e, side); if (v != null && (!best || amToDec(v) > amToDec(best.v))) best = {v, e}; });
+      if (!best) continue;
+      const r = evalProp(p, k, L.line, side);
+      out.push({p, k, line:L.line, side, odds:best.v, bk:best.e.book, book:true, r, edge: r.prob - implied(best.v), score: r.score});
+    }
+  }
+  return out;
+}
+function bbVerdict(x){
+  const R = stratRecords(), user = stratOn();
+  const fits = LAB.filter(st => st.t && st.t(x));
+  let use;
+  if (user) { if (!user.t || !user.t(x)) return null; use = user; }
+  else {
+    use = fits.filter(st => R[st.id] && R[st.id].n >= OK_N && R[st.id].roi > 0)
+      .sort((a,b) => isProven(R[b.id]) - isProven(R[a.id]) || R[b.id].roi - R[a.id].roi)[0];
+    if (!use) return null;
+  }
+  const rec = recFor(use);
+  let tone = isProven(rec) ? 'g' : 'y', note = '';
+  if (x.odds < -250) { tone = 'y'; note = 'The price is steep, so bet small.'; }
+  else if (tone === 'y') note = rec.n ? (rec.n < PROVEN_N ? `Only ${rec.n} past picks like this, so it isn’t proven yet. Bet small.` : 'This strategy is close to break-even. Bet small.') : 'No past results for this strategy yet. Bet small.';
+  return {tone, st:use, rec, note, fits};
+}
+function bbCard(x, v, i, top){
+  const nx = x.p.next, opp = nx ? `${nx.home ? 'vs' : '@'} ${esc(nx.opp)}` : '';
+  const wp = v.rec.n ? Math.round(v.rec.wp*100) : null, ev = evOf(x), on = inSlipX(x);
+  const also = v.fits.filter(s => s.id !== v.st.id && s.id !== 'all');
+  return `<details class="bb ${v.tone} ${top ? 'top' : ''}"><summary>
+    ${top ? '<div class="bb-star">⭐ Pick of the day</div>' : ''}
+    <div class="bb-row1"><span class="bb-badge ${v.tone}">${v.tone === 'g' ? '🟢 BET IT' : '🟡 SMALL BET'}</span><span class="bb-who"><b>${esc(x.p.name)}</b> <span class="meta">${esc(x.p.team)} ${opp}</span></span></div>
+    <div class="bb-bet ${x.side === 'over' ? 'side-o' : 'side-u'}">${x.side === 'over' ? 'OVER' : 'UNDER'} ${x.line} ${esc(statWord(x.k))}</div>
+    <div class="bb-why">${esc(whyText(v.st.id, x))}.${wp != null ? ` Picks like this won <b>${wp}%</b> of the time.` : ''}</div>
+    <div class="bb-foot"><span class="meta">${esc(priceTxt(x))}${nx ? `, ${esc(gameWhen(nx))}` : ''}</span><span class="bb-more">Details ▾</span></div>
+  </summary><div class="bb-body">
+    <div class="bb-stats">
+      <div><span>Chance it hits</span><b>${pct(x.r.prob)}</b></div>
+      <div><span>Value</span><b class="${ev >= 0 ? 'pos' : 'neg'}">${ev >= 0 ? '+' : ''}${Math.round(ev*100)}%</b></div>
+      <div><span>Last 10 games</span><b>${x.r.L10.h} of ${x.r.L10.h + x.r.L10.m}</b></div>
+      <div><span>Grade</span><b>${gradeX(x)}</b></div>
+    </div>
+    ${x.r.L10.seq ? `<div class="tk" aria-label="Last 10, newest first">${x.r.L10.seq.slice(0,10).map(s => `<i class="${s}"></i>`).join('')}</div>` : ''}
+    <div class="bb-strat">Strategy: <b style="color:var(--ink)">${esc(v.st.n)}</b>. ${v.rec.n ? `${v.rec.w} won, ${v.rec.l} lost, ${v.rec.roi >= 0 ? '+' : ''}${Math.round(v.rec.roi*100)}% return.` : 'No results yet.'}${also.length ? ` Also fits: ${also.map(s => esc(s.n)).join(', ')}.` : ''}</div>
+    ${v.note ? `<div class="bb-note">${esc(v.note)}</div>` : ''}
+    <div class="bb-btns"><button class="btn" data-bbadd="${i}">${on ? '✓ In your parlay' : '+ Add to parlay'}</button><button class="btn sec" data-bbopen="${i}">See player</button></div>
+  </div></details>`;
+}
+function renderBest(){
+  const box = $('#bestBets'); if (!box || !S.data) return;
+  bbRows = [];
+  const days = slateDays(), ad = activeDay();
+  $('#dayChips').innerHTML = days.length > 1 ? days.slice(0, 6).map(d => `<button class="chip" data-day="${d}" aria-pressed="${d===ad}">${esc(dayLabel(d))}</button>`).join('') : '';
+  const cands = bbCandidates(), list = [];
+  cands.forEach(x => { const v = bbVerdict(x); if (v) list.push({x, v}); });
+  list.sort((a,b) => (a.v.tone === 'g' ? 0 : 1) - (b.v.tone === 'g' ? 0 : 1) || b.x.r.prob - a.x.r.prob);
+  const R = stratRecords(), user = stratOn(), bs = bestStrat(), g = list.filter(o => o.v.tone === 'g').length;
+  const rr = st => { const o = recFor(st); return o.n ? ` It won <b>${pct(o.wp)}</b> of ${o.n} past picks (${o.roi >= 0 ? '+' : ''}${Math.round(o.roi*100)}% return).` : ''; };
+  let sub;
+  if (!cands.length) sub = S.players.some(p => Object.keys(p.lines || {}).length) ? 'No lines for this day yet. Check back after the next update.' : 'No lines yet. Picks show up once the morning run pulls lines from your apps.';
+  else if (!labDocs.length) sub = 'Loading past results…';
+  else if (user) sub = `Using your strategy: <b>${esc(user.n)}</b>.${rr(user)} Change it in Results.`;
+  else sub = bs ? `Every pick fits a strategy that has made money. The best one: <b>${esc(bs.n)}</b>.${rr(bs)}` : 'No strategy has enough winning picks yet, so these are all small bets.';
+  $('#bbSub').innerHTML = sub + (list.length ? ` <br><b>${g}</b> to bet${list.length - g ? `, <b>${list.length - g}</b> small` : ''}. ${cands.length - list.length} other props skipped.` : '');
+  const shown = bbMore ? list : list.slice(0, 12);
+  box.innerHTML = list.length ? shown.map((o, i) => { bbRows.push(o.x); return bbCard(o.x, o.v, i, i === 0 && o.v.tone === 'g' && o.x.odds >= -200); }).join('')
+    : (cands.length && labDocs.length ? `<div class="panel"><div class="empty"><b>No bets today</b>Nothing fits a winning strategy on this day. Skipping is a smart bet too.</div></div>` : '');
+  $('#bbMoreWrap').innerHTML = list.length > shown.length ? `<button class="btn sec bb-moreb" data-bbmore="1">Show ${list.length - shown.length} more</button>` : '';
 }
 
 /* ---------- defense tab ---------- */
@@ -3461,8 +3644,8 @@ function attachSearch(inp, onPick){
 /* ---------- tabs & render ---------- */
 function setTab(t){
   S.tab = t;
-  $$('.tab').forEach(b => b.setAttribute('aria-selected', b.dataset.tab===t));
-  ['today','analyzer','finder','defense','games','parlay','tracker'].forEach(v => $('#view-'+v).hidden = v!==t);
+  $$('.tab').forEach(b => b.setAttribute('aria-selected', b.dataset.tab===t || (t==='defense' && b.dataset.tab==='finder')));
+  ['today','injuries','analyzer','finder','defense','games','parlay','tracker'].forEach(v => $('#view-'+v).hidden = v!==t);
   if (t === 'tracker') matchesOpen = false;
   renderAll(); window.scrollTo({top:0});
   if (t === 'tracker') { setTimeout(autoGrade, 100); setTimeout(labSync, 300); }
@@ -3472,7 +3655,8 @@ function renderAll(){
   if (!S.data) return;
   if (S.tab==='today') renderToday();
   if (S.tab==='analyzer') renderAnalyzer();
-  if (S.tab==='finder') renderFinder();
+  if (S.tab==='finder') { renderFinder(); setTimeout(renderStale, 0); }
+  if (S.tab==='injuries') { renderInjury(); renderImpact(); }
   if (S.tab==='defense') renderDefense();
   if (S.tab==='parlay') renderParlay();
   if (S.tab==='tracker') renderTracker();
@@ -3482,6 +3666,7 @@ function renderAll(){
 /* ---------- events ---------- */
 $$('.tab').forEach(b => b.addEventListener('click', () => setTab(b.dataset.tab)));
 $('#fab').addEventListener('click', () => setTab('parlay'));
+document.addEventListener('click', e => { const g = e.target.closest('[data-gotab]'); if (g) { e.preventDefault(); setTab(g.dataset.gotab); } });
 $('#dataBtn').addEventListener('click', () => { renderRunReport(); const d=$('#drawer'); d.hidden=!d.hidden; $('#dataBtn').setAttribute('aria-expanded', !d.hidden); });
 $('#playerIn').addEventListener('change', e => { const v = e.target.value.trim().toLowerCase(); const p = S.players.find(x=>x.name.toLowerCase()===v) || S.players.find(x=>x.name.toLowerCase().includes(v)); if (p) selectPlayer(p.id); });
 ['#stratSel','#stratSel2','#fStrat'].forEach(id => $(id).addEventListener('change', e => { S.strat = e.target.value; lsSet(LSP+'strat', S.strat); renderAll(); toast(S.strat === 'all' ? 'Showing all props' : `Only props that fit “${stratOn().n}”`); }));
@@ -3531,6 +3716,9 @@ $('#fBuild').addEventListener('click', e => { const b = e.target.closest('button
 $('#fCorr').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; S.f.corr = b.dataset.v; saveF(); $$('#fCorr button').forEach(x => x.setAttribute('aria-pressed', x === b)); });
 $('#fTarget').addEventListener('change', e => { S.f.target = +e.target.value; saveF(); });
 $('#view-today').addEventListener('click', e => {
+  const ba = e.target.closest('[data-bbadd]'); if (ba) { const x = bbRows[+ba.dataset.bbadd]; toggleX(x); ba.textContent = inSlipX(x) ? '\u2713 In your parlay' : '+ Add to parlay'; renderSlipBadges(); return; }
+  const bo = e.target.closest('[data-bbopen]'); if (bo) { openX(bbRows[+bo.dataset.bbopen]); return; }
+  const bm = e.target.closest('[data-bbmore]'); if (bm) { bbMore = true; renderBest(); return; }
   const d = e.target.closest('[data-day]'); if (d) { S.day = d.dataset.day; refreshPlayerList(); renderToday(); renderSlipBadges(); return; }
   const s = e.target.closest('[data-sadd]'); if (s) { toggleX(streakRows[+s.dataset.sadd]); renderToday(); renderSlipBadges(); return; }
   const pa = e.target.closest('[data-padd]'); if (pa) { toggleX(todayPotd || todayPicks[0]); renderToday(); renderSlipBadges(); return; }
