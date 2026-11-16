@@ -598,6 +598,29 @@ details.bb[open] .bb-more{opacity:.6}
 .gotab-row .ghost{width:auto}
 .inj-intro{font-size:16px}
 main{padding-bottom:90px}
+/* hit-rate header + shooting zones */
+.hr-head{display:flex;flex-wrap:wrap;align-items:flex-end;gap:14px 26px;margin:6px 0 12px;padding:12px 14px;background:var(--panel2);border-radius:14px}
+.hr-main .k{font-size:12px;font-weight:700;letter-spacing:.6px;color:var(--muted);text-transform:uppercase}
+.hr-main .v{font-family:var(--cond);font-weight:800;font-size:30px;line-height:1.05}
+.hr-main .v small{font-size:17px;color:var(--muted);font-weight:700;margin-left:4px}
+.hr-main .imp{font-size:13px;color:var(--muted)}
+.hr-avgs{display:flex;gap:18px;flex-wrap:wrap;margin-left:auto}
+.hr-avg{text-align:center;min-width:46px}
+.hr-avg .k{font-size:12px;font-weight:700;color:var(--muted)}
+.hr-avg .v{font-family:var(--cond);font-weight:800;font-size:22px;line-height:1.1}
+.hr-avg .d{font-size:13px;font-weight:700}
+.zone-wrap{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:16px;align-items:start;margin-top:10px}
+@media(max-width:760px){.zone-wrap{grid-template-columns:1fr}}
+.zone-svg{width:100%;height:auto;display:block;max-width:520px;margin:0 auto}
+.zone-svg .zl rect{fill:#fff;stroke:rgba(0,0,0,.25)}
+.zone-svg .zl text{fill:#111;font-family:var(--cond);font-weight:800;font-size:19px;text-anchor:middle}
+.zone-svg .zl text.s{font-size:15px;font-weight:700;fill:#444}
+.zone-take{font-size:16px;line-height:1.45;margin:4px 0 10px}
+.zone-key{display:flex;gap:12px;flex-wrap:wrap;font-size:13px;color:var(--muted);margin-top:8px}
+.zone-key i{display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+table.ztbl td,table.ztbl th{padding:7px 6px}
+@media(max-width:560px){table.ztbl{font-size:14px}}
+
 .bb-badge.r{background:var(--under-soft);color:var(--under)}
 details.alerts{margin-bottom:14px;border-color:var(--warn)}
 details.alerts summary{cursor:pointer;font-size:18px}
@@ -955,6 +978,7 @@ details.inj{margin-top:22px!important}
       <div class="panel">
         <h2 id="chartTitle">Game log vs line</h2>
         <p class="sub" id="chartSub"></p>
+        <div class="hr-head" id="hrHead"></div>
         <div class="ctrl-row">
           <div class="seg" id="winSeg"></div>
           <select id="oppSel" aria-label="Opponent filter"></select>
@@ -962,7 +986,7 @@ details.inj{margin-top:22px!important}
           <div class="mini nba-only">Min. minutes <input type="range" id="minMin" min="0" max="36" step="1" value="0" style="width:110px"><output id="minMinOut">0</output></div>
         </div>
         <div class="chart-box"><canvas id="logChart" aria-label="Game-by-game stat versus the prop line"></canvas></div>
-        <div class="legend"><span><i style="background:var(--over)"></i>Hit</span><span><i style="background:var(--under)"></i>Missed</span><span><i style="background:var(--ball)"></i>Line</span><span><i style="background:var(--court)"></i>5-game average</span></div>
+        <div class="legend"><span><i style="background:var(--over)"></i>Hit</span><span><i style="background:var(--under)"></i>Missed</span><span><i style="background:var(--ball)"></i>Line</span></div>
       </div>
 
       <div class="panel">
@@ -997,6 +1021,12 @@ details.inj{margin-top:22px!important}
       <h2>When teammates sit</h2>
       <p class="sub" id="mateSub"></p>
       <div class="tbl-wrap"><table id="mateTbl"></table></div>
+    </div>
+
+    <div class="panel nba-only" id="zonePanel" style="margin-top:14px">
+      <div class="bd-hd"><h2 style="margin:0">Shooting zones</h2><div class="seg" id="zoneMode"><button data-zm="match">Matchup</button><button data-zm="player">Player</button><button data-zm="def">Opp defense</button></div></div>
+      <p class="sub" id="zoneSub" style="margin-top:6px"></p>
+      <div id="zoneBody"></div>
     </div>
 
     <div class="grid g-half">
@@ -1969,7 +1999,9 @@ function renderAnalyzer(){
   const hi = hitInfo(vals, S.line, S.side);
   $('#chartTitle').textContent = `${STATS[S.stat].n} vs ${S.line}`;
   $('#chartSub').textContent = gs.length ? `${sideTxt} hit in ${hi.h} of ${gs.length} games shown (${pct(hi.pct)}), averaging ${f1(mean(vals))}.` : 'No games match these filters.';
+  renderHitHead(p, gs, vals, hi);
   drawLogChart(gs.slice().reverse(), S.stat, S.line, S.side);
+  renderZones(p);
   drawHist(vals, S.line, S.side);
   // log table
   $('#logSub').textContent = `${gs.length} games, newest first.`;
@@ -1999,18 +2031,150 @@ function chartBase(){
              y:{grid:{color:cssv('--line')}, border:{display:false}, ticks:{color:cssv('--muted'), font:{family:'Barlow', size:11}}, beginAtZero:true} } };
 }
 function mk(id, cfg){ if (!window.Chart) return; if (charts[id]) charts[id].destroy(); charts[id] = new Chart(document.getElementById(id), cfg); }
+function renderHitHead(p, gs, vals, hi){
+  const el = $('#hrHead'); if (!el) return;
+  const n = gs.length, imp = implied(S.odds), sideTxt = S.side === 'over' ? 'Over' : 'Under';
+  const cls = !n ? '' : hi.pct >= .6 ? 'pos' : hi.pct < .45 ? 'neg' : '';
+  const parts = {PRA:['PTS','REB','AST'], PR:['PTS','REB'], PA:['PTS','AST'], RA:['REB','AST'], 'S+B':['STL','BLK']}[S.stat] || [];
+  const avg = k => mean(gs.map(g => statVal(g, k)));
+  const full = k => mean(p.games.map(g => statVal(g, k)));
+  const cell = (k, v, d, title) => `<div class="hr-avg" title="${esc(title)}"><div class="k">${esc(k)}</div><div class="v">${isFinite(v) ? f1(v) : '—'}</div><div class="d ${!isFinite(d) ? '' : d >= 0 ? 'pos' : 'neg'}">${isFinite(d) ? (d >= 0 ? '+' : '') + f1(d) : ''}</div></div>`;
+  const main = avg(S.stat);
+  el.innerHTML = `<div class="hr-main"><div class="k">Hit rate</div><div class="v ${cls}">${n ? pct(hi.pct) : '—'}<small>(${hi.h}/${n})</small></div>
+      <div class="imp">Odds imply ${pct(imp, 1)} ${sideTxt.toLowerCase()}</div></div>
+    <div class="hr-avgs">${cell(S.stat, main, main - S.line, 'Average in these games, and how far it is from the line')}${parts.map(k => cell(k, avg(k), avg(k) - full(k), 'Average in these games vs his full-log average')).join('')}${NBA && !parts.length ? cell('MIN', mean(gs.map(g => g.min)), mean(gs.map(g => g.min)) - mean(p.games.slice(0, 30).map(g => g.min)), 'Minutes in these games vs his last 30') : ''}</div>`;
+}
 function drawLogChart(gs, stat, line, side){
-  const vals = gs.map(g=>statVal(g,stat));
-  const cols = vals.map(v => v===line ? cssv('--push') : ((side==='over'?v>line:v<line) ? cssv('--over') : cssv('--under')));
-  const roll = vals.map((v,i) => i<4 ? null : mean(vals.slice(i-4,i+1)));
+  const p = S.byId[S.pid], vals = gs.map(g => statVal(g, stat));
+  const nx = p && p.next && p.next.date ? p.next : null;
+  const labels = gs.map(g => [`${g.h ? '' : '@'}${g.opp}`, fmtDate(g.d)]);
+  const data = vals.slice(), cols = vals.map(v => v === line ? cssv('--push') : ((side === 'over' ? v > line : v < line) ? cssv('--over') : cssv('--under')));
+  if (nx) { labels.push([`${nx.home ? '' : '@'}${nx.opp}`, 'Next']); data.push(null); cols.push('transparent'); }
   const o = chartBase();
-  o.plugins.tooltip.callbacks = { title: it => { const g = gs[it[0].dataIndex]; return `${fmtDate(g.d)} ${g.h?'vs':'@'} ${g.opp}`; },
-    label: it => it.datasetIndex===0 ? `${stat}: ${it.raw}  (${Math.round(gs[it.dataIndex].min)} min)` : it.datasetIndex===1 ? `Line ${line}` : `5-game avg ${f1(it.raw)}` };
-  mk('logChart', { type:'bar', data:{ labels: gs.map(g => g.opp), datasets:[
-    {type:'bar', data:vals, backgroundColor:cols, borderRadius:4, maxBarThickness:34, order:3},
-    {type:'line', data:vals.map(()=>line), borderColor:cssv('--ball'), borderWidth:2.5, borderDash:[6,4], pointRadius:0, order:1},
-    {type:'line', data:roll, borderColor:cssv('--court'), borderWidth:2, pointRadius:0, tension:.35, spanGaps:true, order:2}
-  ]}, options:o });
+  o.layout = {padding: {top: 6, left: 4}};
+  o.scales.x.ticks = Object.assign(o.scales.x.ticks, {autoSkip: false, font: {family: 'Barlow', size: gs.length > 20 ? 9 : 11, weight: 600}});
+  o.scales.y.grid = {color: 'rgba(127,127,127,.12)'};
+  o.plugins.tooltip.callbacks = { title: it => { const i = it[0].dataIndex; if (i >= gs.length) return `Next: ${nx.home ? 'vs' : '@'} ${nx.opp}`; const g = gs[i]; return `${fmtDate(g.d)} ${g.h ? 'vs' : '@'} ${g.opp}`; },
+    label: it => { if (it.datasetIndex !== 0) return `Line ${line}`; const g = gs[it.dataIndex]; return g ? `${stat}: ${it.raw}  (${Math.round(g.min)} min)` : 'Tonight'; } };
+  const marks = { id: 'plMarks', afterDatasetsDraw(c){
+    const ctx = c.ctx, meta = c.getDatasetMeta(0), y = c.scales.y, few = gs.length <= 30;
+    ctx.save();
+    meta.data.forEach((bar, i) => {
+      if (i >= vals.length) {   // next game: dashed outline with a question mark
+        const top = y.getPixelForValue(Math.max(line, 1)), bot = y.getPixelForValue(0), w = bar.width || 20;
+        ctx.setLineDash([4, 3]); ctx.strokeStyle = cssv('--muted'); ctx.lineWidth = 1.5; ctx.strokeRect(bar.x - w/2, top, w, bot - top); ctx.setLineDash([]);
+        ctx.fillStyle = cssv('--ink'); ctx.font = '800 15px Barlow Condensed, Barlow, sans-serif'; ctx.textAlign = 'center'; ctx.fillText('?', bar.x, bot - 8); return;
+      }
+      if (!few) return;
+      const v = vals[i], bot = y.getPixelForValue(0), w = Math.min(Math.max(bar.width - 4, 14), 30), h = 17;
+      const by = Math.min(bot - h - 3, bar.y + 3 > bot - h - 3 ? bot - h - 3 : bot - h - 3);
+      ctx.fillStyle = 'rgba(255,255,255,.95)'; ctx.beginPath(); (ctx.roundRect ? ctx.roundRect(bar.x - w/2, by, w, h, 4) : ctx.rect(bar.x - w/2, by, w, h)); ctx.fill();
+      ctx.fillStyle = '#111'; ctx.font = `800 ${w < 20 ? 10 : 12}px Barlow Condensed, Barlow, sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(String(v), bar.x, by + h/2 + .5);
+    });
+    // line value tag on the left
+    const ly = y.getPixelForValue(line), x0 = c.chartArea.left;
+    ctx.fillStyle = cssv('--ball'); ctx.beginPath(); (ctx.roundRect ? ctx.roundRect(x0 - 2, ly - 10, 38, 20, 5) : ctx.rect(x0 - 2, ly - 10, 38, 20)); ctx.fill();
+    ctx.fillStyle = cssv('--on-accent'); ctx.font = '800 12px Barlow Condensed, Barlow, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(String(line), x0 + 17, ly + .5);
+    ctx.restore();
+  } };
+  mk('logChart', { type: 'bar', data: { labels, datasets: [
+    {type: 'bar', data, backgroundColor: cols, borderRadius: 4, maxBarThickness: 38, categoryPercentage: .86, barPercentage: .92, order: 2},
+    {type: 'line', data: labels.map(() => line), borderColor: cssv('--ball'), borderWidth: 2, borderDash: [6, 4], pointRadius: 0, order: 1}
+  ]}, options: o, plugins: [marks] });
+}
+/* ---------- shooting zones (NBA): where he shoots vs where tonight's defense is soft ---------- */
+const ZLIST = [['ra','At the rim'],['paint','Paint (non-rim)'],['mid','Mid-range'],['lc3','Left corner 3'],['rc3','Right corner 3'],['atb3','Above-the-break 3']];
+let ZC = {key:null};
+function zoneData(){
+  const Z = S.data && S.data.zones; if (!Z) return null;
+  if (ZC.key === Z) return ZC;
+  const tset = (Z.cur && Z.cur.teams && Object.keys(Z.cur.teams).length >= 20 && Object.values(Z.cur.teams).reduce((m,t) => m + Object.values(t).reduce((a,v) => a + v[1], 0), 0) / 30 > 250) ? Z.cur : (Z.prev || Z.cur);
+  const teams = (tset && tset.teams) || {};
+  const rank = {}, lg = {};
+  ZLIST.forEach(([z]) => {
+    const arr = Object.entries(teams).filter(([,t]) => t[z] && t[z][1] > 0).map(([ab,t]) => [ab, t[z][0]/t[z][1]]).sort((a,b) => b[1] - a[1]);
+    rank[z] = {}; arr.forEach(([ab, v], i) => rank[z][ab] = {r: i + 1, pct: v, of: arr.length});
+    let m = 0, a = 0; Object.values((Z.cur || Z.prev || {}).players || {}).forEach(pz => { if (pz[z]) { m += pz[z][0]; a += pz[z][1]; } });
+    lg[z] = a ? m/a : null;
+  });
+  ZC = {key: Z, Z, teams, rank, lg, teamSeason: tset && tset.season};
+  return ZC;
+}
+function playerZones(pid){
+  const zd = zoneData(); if (!zd) return null;
+  const c = zd.Z.cur && zd.Z.cur.players && zd.Z.cur.players[pid], pv = zd.Z.prev && zd.Z.prev.players && zd.Z.prev.players[pid];
+  const tot = o => o ? Object.values(o).reduce((a,v) => a + v[1], 0) : 0;
+  let z = c, label = zd.Z.cur ? zd.Z.cur.season : '';
+  if (tot(c) < 60 && pv) { z = {}; ZLIST.forEach(([k]) => { const a = (c && c[k]) || [0,0], b = pv[k] || [0,0]; if (a[1] + b[1]) z[k] = [a[0] + b[0], a[1] + b[1]]; }); label = 'this season + last'; }
+  if (!z || !tot(z)) return null;
+  const all = tot(z), out = {};
+  ZLIST.forEach(([k]) => { const v = z[k] || [0,0]; out[k] = {m: v[0], a: v[1], share: v[1]/all, fg: v[1] ? v[0]/v[1] : null}; });
+  return {z: out, fga: all, label};
+}
+const zoneMode = () => S.zm || 'match';
+function zColor(mode, z, pz, rk, zd){
+  const soft = '#2fbf71', tough = '#e5484d', mid = '#e8b04b', dim = '#3a404a';
+  if (mode === 'player') { const lg = zd.lg[z]; if (!pz || !pz.a || pz.fg == null || lg == null) return dim; return pz.fg >= lg + .03 ? soft : pz.fg <= lg - .03 ? tough : mid; }
+  if (!rk) return dim;
+  if (mode === 'match' && pz && pz.share < .05) return dim;
+  return rk.r <= 10 ? soft : rk.r >= 21 ? tough : mid;
+}
+function renderZones(p){
+  const panel = $('#zonePanel'); if (!panel) return;
+  if (!NBA) { panel.hidden = true; return; }
+  $$('#zoneMode button').forEach(b => b.setAttribute('aria-pressed', b.dataset.zm === zoneMode()));
+  const zd = zoneData(), pzAll = p && playerZones(p.id), body = $('#zoneBody'), sub = $('#zoneSub');
+  if (!zd) { sub.textContent = 'Shooting zones show up after the next full morning run of the NBA script.'; body.innerHTML = ''; return; }
+  const opp = p && p.next && p.next.opp, mode = zoneMode();
+  const R = z => opp && zd.rank[z] ? zd.rank[z][opp] : null;
+  if (!pzAll) { sub.textContent = `No shot data for ${p ? p.name : 'this player'} yet.`; body.innerHTML = ''; return; }
+  const pz = pzAll.z;
+  sub.innerHTML = mode === 'player' ? `Where ${esc(p.name)} shoots from (${esc(pzAll.label)}, ${Math.round(pzAll.fga)} shots). Green = he shoots better than the league there.`
+    : !opp ? 'No next game, so there’s no defense to compare.'
+    : mode === 'def' ? `What ${esc(opp)} allows from each zone. #1 = gives up the best shooting (softest), #30 = toughest.`
+    : `Top number: share of ${esc(p.name.split(' ').slice(-1)[0])}’s shots from that zone. Bottom: ${esc(opp)}’s defense rank there (#1 softest, #30 toughest).`;
+  const lbl = z => {
+    const a = pz[z], rk = R(z);
+    if (mode === 'player') return [a.a ? pct(a.share) : '—', a.fg != null && a.a ? `FG ${pct(a.fg)}` : ''];
+    if (mode === 'def') return rk ? [pct(rk.pct), `#${rk.r}`] : ['—', ''];
+    return [a.a ? pct(a.share) : '—', rk ? `#${rk.r}` : ''];
+  };
+  const col = z => zColor(mode, z, pz[z], R(z), zd);
+  const box = (x, y, z) => { const [t1, t2] = lbl(z); const w = 74; return `<g class="zl"><rect x="${x - w/2}" y="${y - 22}" width="${w}" height="${t2 ? 46 : 28}" rx="7"/><text x="${x}" y="${y - 2}">${esc(t1)}</text>${t2 ? `<text class="s" x="${x}" y="${y + 17}">${esc(t2)}</text>` : ''}</g>`; };
+  const svg = `<svg class="zone-svg" viewBox="-45 -10 590 490" role="img" aria-label="Half court split into shooting zones">
+    <rect x="0" y="0" width="500" height="470" rx="6" fill="${col('atb3')}" opacity=".9"/>
+    <rect x="0" y="0" width="30" height="142" fill="${col('lc3')}"/>
+    <rect x="470" y="0" width="30" height="142" fill="${col('rc3')}"/>
+    <path d="M30,0 L30,142 A237.5,237.5 0 0,0 470,142 L470,0 Z" fill="${col('mid')}"/>
+    <rect x="170" y="0" width="160" height="190" fill="${col('paint')}"/>
+    <path d="M210,0 L210,52.5 A40,40 0 0,0 290,52.5 L290,0 Z" fill="${col('ra')}"/>
+    <g fill="none" stroke="rgba(0,0,0,.55)" stroke-width="3">
+      <rect x="0" y="0" width="500" height="470" rx="6"/>
+      <path d="M30,0 L30,142 A237.5,237.5 0 0,0 470,142 L470,0"/>
+      <rect x="170" y="0" width="160" height="190"/>
+      <path d="M210,52.5 A40,40 0 0,0 290,52.5"/>
+      <circle cx="250" cy="190" r="60"/>
+    </g>
+    <line x1="220" y1="40" x2="280" y2="40" stroke="#111" stroke-width="4"/><circle cx="250" cy="52.5" r="9" fill="none" stroke="#111" stroke-width="3"/>
+    ${box(250, 110, 'ra')}${box(250, 168, 'paint')}${box(250, 248, 'mid')}${box(250, 380, 'atb3')}${box(15, 92, 'lc3')}${box(485, 92, 'rc3')}
+  </svg>`;
+  // plain-words takeaway: his main zones vs the defense
+  let take = '';
+  if (opp && mode !== 'player') {
+    const top = ZLIST.map(([z, n]) => ({z, n, s: pz[z].share, rk: R(z)})).filter(o => o.rk && o.s >= .15).sort((a,b) => b.s - a.s).slice(0, 2);
+    const word = r => r <= 10 ? '<b class="pos">soft</b>' : r >= 21 ? '<b class="neg">tough</b>' : 'about average';
+    if (top.length) take = top.map(o => `${pct(o.s)} of his shots come from <b>${o.n.toLowerCase()}</b>, where ${esc(opp)} is ${word(o.rk.r)} (#${o.rk.r}).`).join(' ');
+    const soft = top.filter(o => o.rk.r <= 10).length, tough = top.filter(o => o.rk.r >= 21).length;
+    if (top.length) take += soft > tough ? ' Good sign for his scoring tonight.' : tough > soft ? ' A tougher scoring matchup than usual.' : '';
+  }
+  const rows = ZLIST.map(([z, n]) => { const a = pz[z], rk = R(z), lg = zd.lg[z];
+    return `<tr><td>${n}</td><td class="r">${a.a ? pct(a.share) : '—'}</td><td class="r ${a.fg != null && lg != null && a.a >= 10 ? (a.fg >= lg + .03 ? 'pos' : a.fg <= lg - .03 ? 'neg' : '') : ''}">${a.a && a.fg != null ? pct(a.fg) : '—'}</td>${opp ? `<td class="r">${rk ? pct(rk.pct) : '—'}</td><td class="r ${rk ? (rk.r <= 10 ? 'pos' : rk.r >= 21 ? 'neg' : '') : ''}">${rk ? '#' + rk.r : '—'}</td>` : ''}</tr>`; }).join('');
+  body.innerHTML = `<div class="zone-wrap"><div>${svg}
+      <div class="zone-key">${mode === 'player' ? '<span><i style="background:#2fbf71"></i>Better than league</span><span><i style="background:#e8b04b"></i>About average</span><span><i style="background:#e5484d"></i>Worse</span>'
+        : '<span><i style="background:#2fbf71"></i>Soft defense (#1–10)</span><span><i style="background:#e8b04b"></i>Average</span><span><i style="background:#e5484d"></i>Tough (#21–30)</span>' + (mode === 'match' ? '<span><i style="background:#3a404a"></i>He rarely shoots there</span>' : '')}</div></div>
+    <div>${take ? `<p class="zone-take">${take}</p>` : ''}
+      <div class="tbl-wrap"><table class="ztbl"><thead><tr><th>Zone</th><th class="r">Shots</th><th class="r">FG%</th>${opp ? `<th class="r">${esc(opp)} FG%</th><th class="r">Rank</th>` : ''}</tr></thead><tbody>${rows}</tbody></table></div>
+      <p class="meta" style="margin-top:8px">Defense numbers: ${esc(zd.teamSeason || '')} season. Rank #1 = gives up the highest FG% from that zone.</p></div></div>`;
 }
 function drawHist(vals, line, side){
   if (!vals.length) { mk('histChart', {type:'bar', data:{labels:[], datasets:[]}, options:chartBase()}); return; }
@@ -3763,6 +3927,7 @@ function renderAll(){
 /* ---------- events ---------- */
 $$('.tab').forEach(b => b.addEventListener('click', () => setTab(b.dataset.tab)));
 $('#fab').addEventListener('click', () => setTab('parlay'));
+$('#zoneMode').addEventListener('click', e => { const b = e.target.closest('[data-zm]'); if (!b) return; S.zm = b.dataset.zm; renderZones(S.byId[S.pid]); });
 if (location.hash === '#alerts') setTimeout(() => setTab('alerts'), 300);
 window.addEventListener('hashchange', () => { if (location.hash === '#alerts') setTab('alerts'); });
 $('#view-alerts').addEventListener('click', e => {
