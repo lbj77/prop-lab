@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Prop Lab — NBA player props</title>
+<title>Prop Lab — NFL player props</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@500;600;700;800&display=swap" rel="stylesheet">
@@ -37,7 +37,10 @@ button{cursor:pointer}
 .brand h1 span{color:var(--ball)}
 .chip.dim{opacity:.38}
 .brand h1 .lg{font-size:15px;font-weight:700;color:var(--muted);letter-spacing:.04em;margin-left:2px}
-body.sport-nfl .nba-only{display:none!important}
+body:not(.sport-nba) .nba-only{display:none!important}
+nav.league a,nav.league span{padding:6px 9px!important;font-size:15px!important}
+@media(max-width:400px){nav.league a,nav.league span{padding:5px 7px!important;font-size:14px!important}}
+
 .data-badge{font-size:13px;color:var(--muted);display:flex;align-items:center;gap:6px}
 .dot{width:8px;height:8px;border-radius:50%;background:var(--ball);flex:none}
 .dot.real{background:var(--over)}
@@ -598,6 +601,8 @@ details.bb[open] .bb-more{opacity:.6}
 .gotab-row .ghost{width:auto}
 .inj-intro{font-size:16px}
 main{padding-bottom:90px}
+.an-chart{margin:14px 0 6px;padding-top:14px;border-top:1px solid var(--line)}
+.an-chart h2{font-size:22px;margin:0}
 /* hit-rate header + shooting zones */
 .hr-head{display:flex;flex-wrap:wrap;align-items:flex-end;gap:14px 26px;margin:6px 0 12px;padding:12px 14px;background:var(--panel2);border-radius:14px}
 .hr-main .k{font-size:12px;font-weight:700;letter-spacing:.6px;color:var(--muted);text-transform:uppercase}
@@ -812,7 +817,7 @@ details.inj{margin-top:22px!important}
 <body>
 <header class="top">
   <div class="top-inner">
-    <div class="brand"><h1>Prop<span>Lab</span><small class="lg">NBA</small></h1><nav class="league" aria-label="League"><a href="nba.html">NBA</a><span class="on">NFL</span><a href="ufc.html">UFC</a></nav></div>
+    <div class="brand"><h1>Prop<span>Lab</span><small class="lg">NFL</small></h1><nav class="league" aria-label="League"><a href="nba.html">NBA</a><span class="on">NFL</span><a href="nhl.html">NHL</a><a href="mlb.html">MLB</a><a href="ufc.html">UFC</a></nav></div>
     <div class="actions">
       <select class="ghost" id="bookSel" aria-label="Which app you’re betting on" hidden></select>
       <button class="btn" id="refreshBtn" title="Load the latest shared picks">↻ Refresh</button>
@@ -954,6 +959,19 @@ details.inj{margin-top:22px!important}
       </div>
       <div class="player-name" id="pName">—</div>
       <div class="meta" id="pMeta"></div>
+      <div class="an-chart">
+        <h2 id="chartTitle">Game log vs line</h2>
+        <p class="sub" id="chartSub"></p>
+        <div class="hr-head" id="hrHead"></div>
+        <div class="chart-box"><canvas id="logChart" aria-label="Game-by-game stat versus the prop line"></canvas></div>
+        <div class="legend"><span class="nba-only" style="color:var(--muted)">Under each bar: opponent, date, minutes played (orange = he played a lot less than usual)</span><span><i style="background:var(--over)"></i>Hit</span><span><i style="background:var(--under)"></i>Missed</span><span><i style="background:var(--ball)"></i>Line</span></div>
+        <div class="ctrl-row" style="margin-top:10px">
+          <div class="seg" id="winSeg"></div>
+          <select id="oppSel" aria-label="Opponent filter"></select>
+          <div class="seg" id="venueSeg"><button data-v="all" aria-pressed="true">All</button><button data-v="home" aria-pressed="false">Home</button><button data-v="away" aria-pressed="false">Away</button></div>
+          <div class="mini nba-only">Min. minutes <input type="range" id="minMin" min="0" max="36" step="1" value="0" style="width:110px"><output id="minMinOut">0</output></div>
+        </div>
+      </div>
       <div id="anInj"></div>
       <div class="teampick">
         <div class="tp-hd"><label class="f" style="margin:0">Browse a game or team</label><select class="ghost" id="stratSel2" aria-label="Only players who fit a strategy"></select><span class="gpick" data-gpick></span><select class="ghost" id="teamSel" aria-label="Pick a team"></select></div>
@@ -974,21 +992,7 @@ details.inj{margin-top:22px!important}
     <div class="stratfit" id="stratFit"></div>
     <div class="strips" id="strips"></div>
 
-    <div class="grid g-main">
-      <div class="panel">
-        <h2 id="chartTitle">Game log vs line</h2>
-        <p class="sub" id="chartSub"></p>
-        <div class="hr-head" id="hrHead"></div>
-        <div class="ctrl-row">
-          <div class="seg" id="winSeg"></div>
-          <select id="oppSel" aria-label="Opponent filter"></select>
-          <div class="seg" id="venueSeg"><button data-v="all" aria-pressed="true">All</button><button data-v="home" aria-pressed="false">Home</button><button data-v="away" aria-pressed="false">Away</button></div>
-          <div class="mini nba-only">Min. minutes <input type="range" id="minMin" min="0" max="36" step="1" value="0" style="width:110px"><output id="minMinOut">0</output></div>
-        </div>
-        <div class="chart-box"><canvas id="logChart" aria-label="Game-by-game stat versus the prop line"></canvas></div>
-        <div class="legend"><span><i style="background:var(--over)"></i>Hit</span><span><i style="background:var(--under)"></i>Missed</span><span><i style="background:var(--ball)"></i>Line</span></div>
-      </div>
-
+    <div class="grid">
       <div class="panel">
         <h2>Projection</h2>
         <p class="sub">Weighted blend of recent form and the matchup.</p>
@@ -1255,8 +1259,70 @@ const lsSet = (k,v) => { try { localStorage.setItem(k, JSON.stringify(v)); retur
 
 const SPORT = 'nfl';
 const NBA = SPORT === 'nba';
-const LSP = NBA ? 'proplab:' : 'nfllab:';
-const CFG = NBA ? {
+const LSP = NBA ? 'proplab:' : SPORT === 'nfl' ? 'nfllab:' : SPORT + 'lab:';
+const NHL_CFG = {
+  league:'NHL', script:'nhl_props_export.py', file:'nhl_props_data.json',
+  stats: {
+    'Points':{f:['gl','a'],n:'Points'}, 'Goals':{f:['gl'],n:'Goals (anytime)'}, 'Assists':{f:['a'],n:'Assists'}, 'SOG':{f:['sog'],n:'Shots on goal'},
+    'Blocks':{f:['blk'],n:'Blocked shots'}, 'PPP':{f:['ppp'],n:'Power-play points'}, 'Hits':{f:['hit'],n:'Hits'}, 'Saves':{f:['sv'],n:'Goalie saves'}
+  },
+  base:['gl','a','sog','blk','ppp','hit','sv'],
+  main:['Points','Goals','Assists','SOG','Blocks','Saves'], top5:['Points','SOG','Assists','Goals','Saves'],
+  dstats:['Points','Goals','Assists','SOG','Blocks','Saves'], logCols:['Points','Goals','Assists','SOG'], logColsBy:{G:['Saves']}, finder:['Points','SOG','Assists','Goals','Saves'],
+  yesno:['Goals'], poisson:['Points','Goals','Assists','SOG','Blocks','PPP','Hits'],
+  useMin:{Goals:.15, Assists:.2, Points:.3, PPP:.1, Saves:10},
+  words:{Points:'points', Goals:'goals', Assists:'assists', SOG:'shots on goal', Blocks:'blocked shots', PPP:'power-play points', Hits:'hits', Saves:'saves'},
+  posGroups:[['C','Centers'],['W','Wingers'],['D','Defense'],['G','Goalies']],
+  posOf: s => s === 'G' ? 'G' : s === 'D' ? 'D' : s === 'C' ? 'C' : (['L','R','LW','RW','W'].includes(s) ? 'W' : ''),
+  defEx: 'Example: for Connor McDavid’s shots, use the <b>VAN</b> row if he plays VAN.',
+  sample: { days: 2, n: 40, toi: true,
+    teams: ['ANA','BOS','BUF','CAR','CBJ','CGY','CHI','COL','DAL','DET','EDM','FLA','LAK','MIN','MTL','NJD','NSH','NYI','NYR','OTT','PHI','PIT','SEA','SJS','STL','TBL','TOR','UTA','VAN','VGK','WPG','WSH'],
+    cont: ['sv'],
+    players: [
+      ['Jace Corrigan','EDM','C',{gl:.65,a:1.05,sog:3.9,blk:.4,ppp:.45,hit:.6,_toi:21.5}],
+      ['Lukas Varga','EDM','R',{gl:.45,a:.7,sog:3.1,blk:.5,ppp:.3,hit:1.1,_toi:19}],
+      ['Matt Delaney','TOR','L',{gl:.55,a:.5,sog:3.6,blk:.3,ppp:.25,hit:.9,_toi:20}],
+      ['Owen Pruitt','TOR','D',{gl:.12,a:.45,sog:2.1,blk:1.9,ppp:.15,hit:1.6,_toi:23}],
+      ['Nico Bellamy','COL','C',{gl:.5,a:.95,sog:3.4,blk:.5,ppp:.4,hit:.5,_toi:22}],
+      ['Rory Haddad','COL','D',{gl:.2,a:.6,sog:2.8,blk:1.4,ppp:.3,hit:.7,_toi:24}],
+      ['Elias Strom','VAN','R',{gl:.4,a:.55,sog:2.9,blk:.4,ppp:.2,hit:1.3,_toi:18}],
+      ['Tomas Reyes','VAN','G',{sv:26,_toi:60}],
+      ['Kyle Marchetti','EDM','G',{sv:25,_toi:60}],
+      ['Ben Lindgren','FLA','W',{gl:.38,a:.5,sog:2.7,blk:.6,ppp:.15,hit:2.4,_toi:17}]
+    ] }
+};
+const MLB_CFG = {
+  league:'MLB', script:'mlb_props_export.py', file:'mlb_props_data.json',
+  stats: {
+    'Hits':{f:['hh'],n:'Hits'}, 'TB':{f:['tb'],n:'Total bases'}, 'HR':{f:['hr'],n:'Home runs'}, 'RBI':{f:['rbi'],n:'RBIs'}, 'Runs':{f:['rs'],n:'Runs scored'},
+    'H+R+RBI':{f:['hh','rs','rbi'],n:'Hits + runs + RBIs'}, 'Batter K':{f:['bk'],n:'Strikeouts (batter)'}, 'BB':{f:['bb'],n:'Walks'}, 'SB':{f:['sb'],n:'Stolen bases'},
+    'Pitcher K':{f:['pk'],n:'Strikeouts (pitcher)'}, 'Outs':{f:['outs'],n:'Outs recorded'}, 'Hits Allowed':{f:['ph'],n:'Hits allowed'}, 'ER':{f:['er'],n:'Earned runs'}, 'Walks Allowed':{f:['pbb'],n:'Walks allowed'}
+  },
+  base:['hh','tb','hr','rbi','rs','bb','bk','sb','pk','ph','er','pbb','outs'],
+  main:['Hits','TB','HR','RBI','Runs','H+R+RBI','Pitcher K','Outs','Hits Allowed','ER'], top5:['Hits','TB','H+R+RBI','Pitcher K','Outs'],
+  dstats:['Hits','TB','HR','RBI','Runs','Pitcher K','Outs','ER'], logCols:['Hits','TB','RBI','Runs'], logColsBy:{P:['Pitcher K','Outs','Hits Allowed','ER']}, finder:['Hits','TB','H+R+RBI','Pitcher K','Outs'],
+  yesno:['HR','SB'], poisson:['Hits','TB','HR','RBI','Runs','H+R+RBI','Batter K','BB','SB','Pitcher K','Hits Allowed','ER','Walks Allowed'],
+  useMin:{HR:.08, SB:.05, RBI:.2, Runs:.2, Hits:.4, BB:.15, 'Batter K':.3, ER:.5, 'Walks Allowed':.5, Outs:6, 'Pitcher K':2, 'Hits Allowed':2},
+  words:{Hits:'hits', TB:'total bases', HR:'home runs', RBI:'RBIs', Runs:'runs', 'H+R+RBI':'hits + runs + RBIs', 'Batter K':'strikeouts', BB:'walks', SB:'stolen bases', 'Pitcher K':'strikeouts', Outs:'outs', 'Hits Allowed':'hits allowed', ER:'earned runs', 'Walks Allowed':'walks allowed'},
+  posGroups:[['H','Hitters'],['P','Pitchers']],
+  posOf: s => ['P','SP','RP'].includes(s) ? 'P' : (s ? 'H' : ''),
+  defEx: 'Example: for Aaron Judge’s hits, use the <b>BOS</b> row if he plays BOS.',
+  sample: { days: 1, n: 45,
+    teams: ['ARI','ATL','BAL','BOS','CHC','CWS','CIN','CLE','COL','DET','HOU','KC','LAA','LAD','MIA','MIL','MIN','NYM','NYY','ATH','PHI','PIT','SD','SF','SEA','STL','TB','TEX','TOR','WSH'],
+    cont: ['outs'],
+    players: [
+      ['Dante Moreno','NYY','RF',{hh:1.15,tb:2.2,hr:.32,rbi:.85,rs:.8,bb:.6,bk:1.2,sb:.05}],
+      ['Caleb Whitt','NYY','SS',{hh:1.05,tb:1.6,hr:.15,rbi:.55,rs:.7,bb:.35,bk:.9,sb:.25}],
+      ['Marco Ilic','LAD','DH',{hh:1.1,tb:2.0,hr:.28,rbi:.8,rs:.85,bb:.55,bk:1.0,sb:.15}],
+      ['Jesse Okoye','LAD','CF',{hh:.95,tb:1.5,hr:.14,rbi:.5,rs:.65,bb:.3,bk:1.1,sb:.3}],
+      ['Rafael Duarte','BOS','3B',{hh:1.0,tb:1.7,hr:.2,rbi:.65,rs:.6,bb:.4,bk:.95,sb:.08}],
+      ['Tyler Banks','HOU','1B',{hh:1.0,tb:1.8,hr:.24,rbi:.75,rs:.6,bb:.45,bk:1.15,sb:.02}],
+      ['Gavin Reese','NYY','P',{pk:7.4,outs:18,ph:5.2,er:2.4,pbb:1.8},true],
+      ['Hideo Mori','LAD','P',{pk:6.6,outs:17,ph:5.0,er:2.2,pbb:1.6},true],
+      ['Cole Brandt','BOS','P',{pk:5.6,outs:16,ph:5.8,er:2.8,pbb:2.0},true]
+    ] }
+};
+const CFG = SPORT === 'nhl' ? NHL_CFG : SPORT === 'mlb' ? MLB_CFG : NBA ? {
   league:'NBA', script:'nba_props_export.py', file:'props_data.json',
   stats: {
     PTS:{f:['pts'],n:'Points'}, REB:{f:['reb'],n:'Rebounds'}, AST:{f:['ast'],n:'Assists'}, '3PM':{f:['fg3m'],n:'Threes made'},
@@ -1267,7 +1333,7 @@ const CFG = NBA ? {
   main:['PTS','REB','AST','3PM','PRA','PR','PA','RA'], top5:['PTS','REB','AST','3PM','PRA'],
   dstats:['PTS','REB','AST','3PM','PRA','STL','BLK','TOV'], logCols:['PTS','REB','AST','3PM'], finder:['PTS','REB','AST','3PM','PRA']
 } : {
-  league:'NFL', script:'nfl_props_export.py', file:'nfl_props_data.json',
+  league:'NFL', script:'nfl_props_export.py', file:'nfl_props_data.json', yesno:['TD'],
   stats: {
     'Pass Yds':{f:['pyd'],n:'Passing yards'}, 'Pass TD':{f:['ptd'],n:'Passing TDs'}, 'Comp':{f:['cmp'],n:'Completions'}, 'Pass Att':{f:['att'],n:'Pass attempts'},
     'INT':{f:['int'],n:'Interceptions'}, 'Rush Yds':{f:['ryd'],n:'Rushing yards'}, 'Rush Att':{f:['car'],n:'Rush attempts'},
@@ -1278,8 +1344,13 @@ const CFG = NBA ? {
   dstats:['Pass Yds','Pass TD','Comp','Rush Yds','Rec','Rec Yds','TD','INT'], logCols:['Pass Yds','Rush Yds','Rec','Rec Yds'], finder:['Pass Yds','Rush Yds','Rec','Rec Yds','TD']
 };
 const STATS = CFG.stats;
+const YESNO = CFG.yesno || [], POIS = CFG.poisson || [];
+const SHOWMIN = NBA || SPORT === 'nhl';
+// chance of at least k events when the average is lam (hockey shots, baseball hits: small counts)
+function poisAtLeast(lam, k){ if (k <= 0) return 1; let term = Math.exp(-lam), cdf = term; for (let i = 1; i < k; i++) { term *= lam / i; cdf += term; } return Math.max(0, Math.min(1, 1 - cdf)); }
 const statVal = (g, k) => STATS[k].f.reduce((s,f)=>s+(+g[f]||0),0);
 const WINS = [5,10,15,20,30,0];
+const logColsOf = p => (CFG.logColsBy && CFG.logColsBy[posGrp(p)]) || CFG.logCols;
 
 /* ---------- state ---------- */
 const S = {
@@ -1303,7 +1374,45 @@ let cloudReadyResolve; const cloudReady = new Promise(r => cloudReadyResolve = r
 const shareOn = () => lsGet(LSP+'shareData') !== false;
 
 /* ---------- sample data (fictional players) ---------- */
-function makeSample(){ return NBA ? makeSampleNBA() : makeSampleNFL(); }
+function makeSample(){ return NBA ? makeSampleNBA() : CFG.sample ? makeSampleGeneric() : makeSampleNFL(); }
+// made-up NHL / MLB players so a fresh page has something to show
+function makeSampleGeneric(){
+  const C = CFG.sample;
+  let seed = 20261116;
+  const rng = () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+  const nrm = () => { let u=0,v=0; while(!u) u=rng(); while(!v) v=rng(); return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v); };
+  const pois = l => { const L=Math.exp(-l); let k=0,p=1; do { k++; p*=rng(); } while(p > L); return k-1; };
+  const T = C.teams, def = {}; T.forEach(t => { def[t] = {}; CFG.base.forEach(f => def[t][f] = 1 + (rng()-.5)*.3); });
+  const now = new Date(), today = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+  const nextOpp = {}; T.forEach(t => { if (nextOpp[t]) return; let o; do { o = T[Math.floor(rng()*T.length)]; } while (o === t || nextOpp[o]); nextOpp[t] = {opp:o, home:true}; nextOpp[o] = {opp:t, home:false}; });
+  const players = C.players.map((r, i) => {
+    const [name, team, pos, b, starter] = r, every = starter ? 5 : 1;
+    const games = [];
+    for (let gi = C.n; gi >= 1; gi--) {
+      if (gi % every) continue;
+      const d = new Date(now.getTime() - gi*C.days*864e5).toISOString().slice(0,10);
+      let o; do { o = T[Math.floor(rng()*T.length)]; } while (o === team);
+      const g = {d, opp:o, h: rng() < .5 ? 1 : 0};
+      if (b._toi) g.min = Math.max(5, Math.round((b._toi + nrm()*2.2)*10)/10);
+      CFG.base.forEach(f => { const mu = (b[f] || 0) * def[o][f]; if (!mu) return; const v = (C.cont || []).includes(f) ? Math.max(0, Math.round(mu + nrm()*mu*.18)) : pois(mu); if (v) g[f] = v; });
+      if (CFG.base.includes('tb') && g.hh) g.tb = Math.max(g.hh, g.tb || g.hh); else if (g.tb && !g.hh) delete g.tb;
+      games.push(g);
+    }
+    games.reverse();
+    const lines = {};
+    CFG.main.forEach(k => {
+      const m = mean(games.slice(0,10).map(g => statVal(g,k))), need = (CFG.useMin || {})[k] ?? .5;
+      if (!(m >= need)) return;
+      const yn = (CFG.yesno || []).includes(k), ln = yn ? .5 : Math.max(.5, Math.floor(m*(.95+rng()*.1)) + .5), books = {};
+      ['bovada','draftkings','fanduel'].forEach(bk => { const o = -115 + Math.round((rng()-.5)*40/5)*5; books[bk] = {line: ln, over: yn ? 120 + Math.round(rng()*200/5)*5 : o, under: yn ? null : -220 - o}; });
+      if (!yn) ['prizepicks','pick6'].forEach(bk => { books[bk] = {line: ln, over:null, under:null}; });
+      lines[k] = {line: ln, books};
+    });
+    return {id:'s'+i, name, team, pos, status:'', next: Object.assign({date: today, time:'19:00'}, nextOpp[team]), lines, games};
+  });
+  return {generated: new Date().toISOString(), season:'sample', sample:true, players};
+}
+
 function makeSampleNBA(){
   let seed = 20261016;
   const rng = () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
@@ -1417,7 +1526,7 @@ function validate(d){
     id: String(p.id ?? 'p'+i), name:String(p.name), team:String(p.team||''), pos:String(p.pos||''), status: p.status ? String(p.status) : '', prevTeam: p.prev_team ? String(p.prev_team) : '',
     next: p.next && p.next.opp ? {opp:String(p.next.opp), home:!!p.next.home, date:String(p.next.date||''), time:String(p.next.time||''), total: isFinite(+p.next.total) && p.next.total !== null && p.next.total !== '' ? +p.next.total : null} : null,
     lines: normLines(p.lines),
-    games: p.games.filter(g => g && g.d).map(g => { const o = {d:String(g.d).slice(0,10), opp:String(g.opp||''), h:g.h?1:0, tm: g.tm ? String(g.tm) : '', min: NBA ? (+g.min||0) : 60}; BASE.forEach(f => o[f] = +g[f]||0); return o; })
+    games: p.games.filter(g => g && g.d).map(g => { const o = {d:String(g.d).slice(0,10), opp:String(g.opp||''), h:g.h?1:0, tm: g.tm ? String(g.tm) : '', min: SHOWMIN ? (+g.min||0) : 60}; BASE.forEach(f => o[f] = +g[f]||0); return o; })
                 .sort((a,b) => a.d < b.d ? 1 : -1)
   })).filter(p => p.games.length);
   if (!players.length) throw new Error('No players with game logs in that file.');
@@ -1495,8 +1604,8 @@ const dayDiff = (a,b) => Math.round((Date.parse(a+'T12:00:00Z') - Date.parse(b+'
 const ordn = n => { const t = n%100, u = n%10; return n + ((t>10&&t<14) ? 'th' : u===1 ? 'st' : u===2 ? 'nd' : u===3 ? 'rd' : 'th'); };
 function nextRestOf(p){ if (!p.next || !p.next.date || !p.games[0]) return null; const d = dayDiff(p.next.date, p.games[0].d); return d > 0 && d < 30 ? d : null; }
 let DEFW = {}, DEF10 = {}, DEFP = {}, DEF_RAW = {}, MISSD = {};
-const POS_GROUPS = NBA ? [['G','Guards'],['F','Forwards'],['C','Centers']] : [['QB','QBs'],['RB','RBs'],['WR','WRs'],['TE','TEs']];
-function posGrp(p){ const s = String((p && p.pos) || '').toUpperCase(); if (!NBA) return ['QB','RB','WR','TE'].includes(s) ? s : (s==='FB' ? 'RB' : ''); return s[0]==='G' ? 'G' : s[0]==='F' ? 'F' : s[0]==='C' ? 'C' : ''; }
+const POS_GROUPS = CFG.posGroups ? CFG.posGroups : NBA ? [['G','Guards'],['F','Forwards'],['C','Centers']] : [['QB','QBs'],['RB','RBs'],['WR','WRs'],['TE','TEs']];
+function posGrp(p){ const s = String((p && p.pos) || '').toUpperCase(); if (CFG.posOf) return CFG.posOf(s); if (!NBA) return ['QB','RB','WR','TE'].includes(s) ? s : (s==='FB' ? 'RB' : ''); return s[0]==='G' ? 'G' : s[0]==='F' ? 'F' : s[0]==='C' ? 'C' : ''; }
 function rateDefense(per, recent){
   const act = {}, exp = {}, out = {};
   for (const [t, days] of Object.entries(per)) { const A = act[t] = {}, E = exp[t] = {}; Object.keys(days).sort().reverse().slice(0, recent).forEach(d => BASE.forEach(f => { A[f] = (A[f]||0) + (days[d].A[f]||0); E[f] = (E[f]||0) + (days[d].E[f]||0); })); }
@@ -1510,7 +1619,7 @@ function computeDefense(){
   S.players.forEach(p => { const g = p.games; for (let i=0;i<g.length;i++) g[i].rest = i+1<g.length ? dayDiff(g[i].d, g[i+1].d) : null; if (g[0] && g[0].d > latest) latest = g[0].d; });
   if (!latest) return;
   // each defense is rated on its own most recent games, so an offseason gap or one opening night can't wipe out the sample
-  const RECENT = NBA ? 30 : 12, per = {}, perG = {};
+  const RECENT = SPORT === 'nfl' ? 12 : 30, per = {}, perG = {};
   for (const p of S.players) {
     const gs = p.games.filter(g => g.min >= 10); if (gs.length < 8) continue;
     const am = mean(gs.map(g=>g.min)); const avg = {}; BASE.forEach(f => avg[f] = mean(gs.map(g=>g[f])));
@@ -1738,9 +1847,9 @@ function renderStale(){
 function entries(p, stat){ const L = p.lines && p.lines[stat]; if (!L || !L.books) return []; return Object.entries(L.books).filter(([b]) => !REF_BOOKS.has(baseBook(b))).map(([b,x]) => ({book:b, base:baseBook(b), line:x.line, over:x.over, under:x.under, dfs:DFS.has(b), alt:!!x.alt || isAlt(b)})); }
 function priceOf(e, side){ if (e.s && !e.s.includes(side[0])) return null; if (e.dfs && !e.alt) return decToAm(1/dfsBE(3)); const v = side==='over' ? e.over : e.under; return v && isFinite(v) ? v : null; }
 // anytime-TD unders (0.5) are rarely offered and are a trap to rank: skip them
-const sideOK = (k, line, side) => NBA || !(k === 'TD' && side === 'under' && +line <= .5);
+const sideOK = (k, line, side) => NBA || !(YESNO.includes(k) && side === 'under' && +line <= .5);
 function chooseLine(p, stat, side, book){
-  if (!NBA && stat === 'TD' && side === 'under') return null;
+  if (!NBA && YESNO.includes(stat) && side === 'under') return null;
   let best = null;
   for (const e of entries(p, stat)) {
     if (book !== 'any' && e.base !== book) continue;
@@ -1790,7 +1899,7 @@ function refreshPlayerList(){
 /* ---------- core evaluation ---------- */
 function gamesFor(p, o={}){
   const mm = o.minMin ?? 0, venue = o.venue ?? 'all';
-  return p.games.filter(g => g.min >= mm && (venue==='all' || (venue==='home' ? g.h : !g.h)));
+  return p.games.filter(g => (+g.min || 0) >= mm && (venue==='all' || (venue==='home' ? g.h : !g.h)));
 }
 function hitInfo(vals, line, side){
   let h=0,m=0,pu=0; const seq = vals.map(v => { if (v===line) { pu++; return 'p'; } const ok = side==='over' ? v>line : v<line; ok?h++:m++; return ok?'h':'m'; });
@@ -1809,7 +1918,7 @@ function evalProp(p, stat, line, side, opts={}){
   const oa = outAdjust(p, stat);
   const proj = Math.max(0, (den ? num/den : a10) * (1 + (dfac-1)*((w.def ?? 50)/100)) + (oa ? oa.adj : 0));
   let s = sd(vals.slice(0,30)); if (!isFinite(s)) s = Math.max(1, proj*.3); s = Math.max(s, 0.8);
-  const pOver = 1 - ncdf((line - proj)/s);
+  const pOver = POIS.includes(stat) ? poisAtLeast(Math.max(proj, .01), Math.floor(line) + 1) : 1 - ncdf((line - proj)/s);
   const probRaw = side==='over' ? pOver : 1 - pOver;
   const prob = calibrate(probRaw);
   const H = k => hitInfo(vals.slice(0, k||vals.length), line, side);
@@ -1839,7 +1948,7 @@ function bookFor(p, stat){
   const e = es.find(x => !x.alt) || es[0]; return {line:e.line, over: e.dfs && !e.alt ? dfsPrice : e.over, under: e.dfs ? dfsPrice : e.under, book:e.book, dfs:e.dfs};
 }
 // skip made-up lines for stats a player barely records (a WR's passing yards, a center's threes)
-const usesStat = (p, k) => mean(p.games.slice(0,10).map(g => statVal(g,k))) >= (k==='TD' ? .3 : 1);
+const usesStat = (p, k) => mean(p.games.slice(0,10).map(g => statVal(g,k))) >= ((CFG.useMin || {})[k] ?? (YESNO.includes(k) ? .3 : 1));
 function estLine(p, stat){ const v = p.games.slice(0,10).map(g=>statVal(g,stat)); const m = mean(v); return isFinite(m) ? Math.max(0.5, Math.floor(m)+.5) : 0.5; }
 let GRATE = {key:'', v:{}};
 // how past picks with a similar edge and a similar model chance actually did (from the Strategy lab)
@@ -2005,9 +2114,9 @@ function renderAnalyzer(){
   drawHist(vals, S.line, S.side);
   // log table
   $('#logSub').textContent = `${gs.length} games, newest first.`;
-  $('#logTbl').innerHTML = `<thead><tr><th>Date</th><th>Opp</th>${NBA?'<th class="r">Min</th>':''}<th class="r">${esc(S.stat)}</th>${CFG.logCols.filter(k=>k!==S.stat).map(k=>`<th class="r">${esc(k)}</th>`).join('')}</tr></thead><tbody>` +
+  $('#logTbl').innerHTML = `<thead><tr><th>Date</th><th>Opp</th>${NBA?'<th class="r">Min</th>':''}<th class="r">${esc(S.stat)}</th>${logColsOf(p).filter(k=>k!==S.stat).map(k=>`<th class="r">${esc(k)}</th>`).join('')}</tr></thead><tbody>` +
     gs.map(g => { const v = statVal(g,S.stat); const ok = v===S.line ? '' : ((S.side==='over'?v>S.line:v<S.line)?'hit':'miss');
-      return `<tr class="${ok}"><td>${esc(fmtDate(g.d))}</td><td>${g.h?'vs':'@'} ${esc(g.opp)}</td>${NBA?`<td class="r">${Math.round(g.min)}</td>`:''}<td class="r v">${v}</td>${CFG.logCols.filter(k=>k!==S.stat).map(k=>`<td class="r">${statVal(g,k)}</td>`).join('')}</tr>`; }).join('') + '</tbody>';
+      return `<tr class="${ok}"><td>${esc(fmtDate(g.d))}</td><td>${g.h?'vs':'@'} ${esc(g.opp)}</td>${NBA?`<td class="r">${Math.round(g.min)}</td>`:''}<td class="r v">${v}</td>${logColsOf(p).filter(k=>k!==S.stat).map(k=>`<td class="r">${statVal(g,k)}</td>`).join('')}</tr>`; }).join('') + '</tbody>';
   renderShop(p);
   renderMates(p);
 }
@@ -2047,12 +2156,14 @@ function renderHitHead(p, gs, vals, hi){
 function drawLogChart(gs, stat, line, side){
   const p = S.byId[S.pid], vals = gs.map(g => statVal(g, stat));
   const nx = p && p.next && p.next.date ? p.next : null;
-  const labels = gs.map(g => [`${g.h ? '' : '@'}${g.opp}`, fmtDate(g.d)]);
+  const labels = gs.map(g => SHOWMIN ? [`${g.h ? '' : '@'}${g.opp}`, fmtDate(g.d), `${Math.round(g.min)}m`] : [`${g.h ? '' : '@'}${g.opp}`, fmtDate(g.d)]);
   const data = vals.slice(), cols = vals.map(v => v === line ? cssv('--push') : ((side === 'over' ? v > line : v < line) ? cssv('--over') : cssv('--under')));
-  if (nx) { labels.push([`${nx.home ? '' : '@'}${nx.opp}`, 'Next']); data.push(null); cols.push('transparent'); }
+  if (nx) { labels.push(SHOWMIN ? [`${nx.home ? '' : '@'}${nx.opp}`, 'Next', ''] : [`${nx.home ? '' : '@'}${nx.opp}`, 'Next']); data.push(null); cols.push('transparent'); }
   const o = chartBase();
   o.layout = {padding: {top: 6, left: 4}};
   o.scales.x.ticks = Object.assign(o.scales.x.ticks, {autoSkip: false, font: {family: 'Barlow', size: gs.length > 20 ? 9 : 11, weight: 600}});
+  const avgMin = SHOWMIN ? mean(gs.map(g => g.min)) : 0;
+  if (SHOWMIN) o.scales.x.ticks.color = c => { const g = gs[c.index]; return g && g.min < avgMin - 6 ? cssv('--warn') : cssv('--muted'); };
   o.scales.y.grid = {color: 'rgba(127,127,127,.12)'};
   o.plugins.tooltip.callbacks = { title: it => { const i = it[0].dataIndex; if (i >= gs.length) return `Next: ${nx.home ? 'vs' : '@'} ${nx.opp}`; const g = gs[i]; return `${fmtDate(g.d)} ${g.h ? 'vs' : '@'} ${g.opp}`; },
     label: it => { if (it.datasetIndex !== 0) return `Line ${line}`; const g = gs[it.dataIndex]; return g ? `${stat}: ${it.raw}  (${Math.round(g.min)} min)` : 'Tonight'; } };
@@ -3421,7 +3532,7 @@ function fitsAll(x){
   return out.sort((a,b) => b.proven - a.proven || sc(b) - sc(a));
 }
 function whyFor(id, x){
-  if (id.startsWith('combo:')) { const parts = id.slice(6).split('+').map(i => whyText(i, x)); return parts.slice(0, 2).join(', and ') + (parts.length > 2 ? ', and more' : ''); }
+  if (id.startsWith('combo:')) { const parts = id.slice(6).split('+').map((i, n) => { const t = whyText(i, x); return n && !/^[A-Z]{2,}/.test(t) ? t[0].toLowerCase() + t.slice(1) : t; }); return parts.slice(0, 2).join(', and ') + (parts.length > 2 ? ', and more' : ''); }
   if (id.startsWith('conf:')) return `${confCount(x)} of our strategies agree`;
   return whyText(id, x);
 }
@@ -3484,7 +3595,7 @@ const pushKey = () => lsGet(LSP+'pushTok');
 const tokHash = t => { let h = 0; for (let i = 0; i < t.length; i++) h = (h*31 + t.charCodeAt(i)) | 0; return 'd' + (h >>> 0).toString(36); };
 const pushRef = tok => (typeof cloud !== 'undefined' && cloud && cloud.stateRef) ? cloud.stateRef.collection('push').doc(tokHash(tok)) : null;
 const pushPrefs = () => ({filters: S.alF, strat: S.strat || 'all', book: S.book, bookName: S.book === 'any' ? '' : bookName(S.book),
-  url: location.href.split('#')[0].split('?')[0], sport: NBA ? 'nba' : 'nfl', device: navigator.userAgent.slice(0, 140), updatedAt: new Date().toISOString()});
+  url: location.href.split('#')[0].split('?')[0], sport: SPORT, device: navigator.userAgent.slice(0, 140), updatedAt: new Date().toISOString()});
 let pushT = null;
 function pushSync(){ clearTimeout(pushT); pushT = setTimeout(async () => { const t = pushKey(); if (!t) return; const r = pushRef(t); if (!r) return; try { await r.set(Object.assign({token: t}, pushPrefs())); } catch(e){} }, 600); }
 function saveAlF(v){ lsSet(LSP+'alF', v); pushSync(); }
@@ -3656,7 +3767,7 @@ function recFor(st){
 }
 const isProven = rec => rec.n >= PROVEN_N && rec.roi > .02;
 function bestStrat(){ const R = stratRecords(); return LAB.filter(st => st.t && R[st.id] && isProven(R[st.id])).sort((a,b) => R[b.id].roi - R[a.id].roi)[0] || null; }
-const statWord = k => (NBA ? {'3PM':'threes','PTS':'points','REB':'rebounds','AST':'assists','PRA':'pts + reb + ast','PR':'pts + reb','PA':'pts + ast','RA':'reb + ast'} : {'TD':'touchdowns (anytime)'})[k] || String((STATS[k] || {}).n || k).toLowerCase();
+const statWord = k => (NBA ? {'3PM':'threes','PTS':'points','REB':'rebounds','AST':'assists','PRA':'pts + reb + ast','PR':'pts + reb','PA':'pts + ast','RA':'reb + ast'} : (CFG.words || {'TD':'touchdowns (anytime)'}))[k] || String((STATS[k] || {}).n || k).toLowerCase();
 function whyText(id, x){
   const r = x.r, opp = x.p.next ? x.p.next.opp : 'them', h = o => `${o.h} of his last ${o.h + o.m}`;
   switch (id) {
