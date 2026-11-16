@@ -959,6 +959,14 @@ details.inj{margin-top:22px!important}
       </div>
       <div class="player-name" id="pName">—</div>
       <div class="meta" id="pMeta"></div>
+      <div class="linebar" style="margin:12px 0 0">
+        <div class="seg side" id="sideSeg"><button data-v="over" aria-pressed="true">Over</button><button data-v="under" aria-pressed="false">Under</button></div>
+        <div class="lineval" id="lineVal">—</div>
+        <input type="range" id="lineRange" min="0.5" max="60" step="0.5" aria-label="Prop line">
+        <label class="mini" style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--muted)">Line <input class="num" type="number" id="lineNum" step="0.5" min="0"></label>
+        <label class="mini" style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--muted)">Odds <input class="num" type="text" id="oddsNum" inputmode="text" autocomplete="off" title="Any format: +150, 2.50, 2.5x, 40%"></label>
+        <span class="tag" id="lineTag">est. line</span>
+      </div>
       <div class="an-chart">
         <h2 id="chartTitle">Game log vs line</h2>
         <p class="sub" id="chartSub"></p>
@@ -980,14 +988,6 @@ details.inj{margin-top:22px!important}
       </div>
     </div>
 
-    <div class="linebar">
-      <div class="seg side" id="sideSeg"><button data-v="over" aria-pressed="true">Over</button><button data-v="under" aria-pressed="false">Under</button></div>
-      <div class="lineval" id="lineVal">—</div>
-      <input type="range" id="lineRange" min="0.5" max="60" step="0.5" aria-label="Prop line">
-      <label class="mini" style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--muted)">Line <input class="num" type="number" id="lineNum" step="0.5" min="0"></label>
-      <label class="mini" style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--muted)">Odds <input class="num" type="text" id="oddsNum" inputmode="text" autocomplete="off" title="Any format: +150, 2.50, 2.5x, 40%"></label>
-      <span class="tag" id="lineTag">est. line</span>
-    </div>
 
     <div class="stratfit" id="stratFit"></div>
     <div class="strips" id="strips"></div>
