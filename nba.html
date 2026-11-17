@@ -636,6 +636,29 @@ details.bb[open] .bb-more{opacity:.6}
 .gotab-row .ghost{width:auto}
 .inj-intro{font-size:16px}
 main{padding-bottom:90px}
+/* slip check */
+#slipCheck{margin-bottom:14px;border-color:var(--ball)}
+.sc-pay{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;margin:10px 0 4px;font-size:16px}
+.sc-pay label{display:flex;align-items:center;gap:8px;font-weight:700}
+.sc-pay input{width:96px;font-size:18px;font-weight:800;text-align:center}
+.sc-verdict{margin:12px 0 8px;padding:14px;border-radius:14px;background:var(--panel2);border-left:6px solid var(--warn)}
+.sc-verdict.g{border-left-color:var(--over)} .sc-verdict.r{border-left-color:var(--under)}
+.sc-verdict .big{font-family:var(--cond);font-weight:800;font-size:26px;line-height:1.1}
+.sc-verdict p{margin:6px 0 0;font-size:16px;line-height:1.45}
+.sc-leg{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border-radius:12px;background:var(--panel2);margin-top:8px;border-left:4px solid var(--warn)}
+.sc-leg.g{border-left-color:var(--over)} .sc-leg.r{border-left-color:var(--under)}
+.sc-leg .ic{font-size:20px;line-height:1.2}
+.sc-leg .t{font-size:16px;font-weight:700}
+.sc-leg .s{font-size:14px;color:var(--muted);margin-top:2px;line-height:1.4}
+.sc-ctl{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:8px}
+.sc-ctl label{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--muted);font-weight:700}
+.sc-ctl input{width:80px;font-weight:800;text-align:center}
+.sc-ctl select{width:auto;min-width:150px}
+.sc-tag{display:inline-block;font-size:12px;font-weight:800;padding:1px 8px;border-radius:999px;margin-left:6px;vertical-align:2px}
+.sc-tag.easy{background:var(--over-soft);color:var(--over)} .sc-tag.hard{background:var(--under-soft);color:var(--under)} .sc-tag.other{background:var(--panel);color:var(--muted);border:1px solid var(--line)}
+.sc-hint{font-size:13px;color:var(--muted);margin-top:4px}
+.sc-fix{margin-top:10px;padding:12px;border-radius:12px;background:var(--over-soft);font-size:16px;line-height:1.45}
+
 .an-chart{margin:14px 0 6px;padding-top:14px;border-top:1px solid var(--line)}
 .an-chart h2{font-size:22px;margin:0}
 /* hit-rate header + shooting zones */
@@ -1179,6 +1202,12 @@ details.inj{margin-top:22px!important}
     <div class="panel" style="margin-top:14px"><div id="gameRecord"></div></div>
   </section>
   <section class="view" id="view-parlay" hidden>
+    <div class="panel" id="slipCheck">
+      <h2>Slip check</h2>
+      <p class="sub">Before you place it: type what your app pays for this slip (the multiplier on the entry screen, like 1.81x). For each pick, set the exact line you got and its type (goblin, demon, discount, boost, anchor, alt line). It tells you if every pick is strong enough for that payout.</p>
+      <div class="sc-pay"><label>My app pays <input class="num" type="number" step="0.01" min="1.01" id="scMult" inputmode="decimal" aria-label="Payout multiplier"> x</label><span class="meta" id="scNeed"></span></div>
+      <div id="scBody"></div>
+    </div>
     <div class="grid g-main" style="margin-top:0">
       <div class="panel">
         <h2>Your parlay</h2>
@@ -2372,6 +2401,7 @@ function renderSlipBadges(){
   fab.innerHTML = `Parlay: ${n} leg${n>1?'s':''} <span>${fmtOdds(decToAm(dec))}</span>`;
 }
 function renderParlay(){
+  renderSlipCheck();
   $('#payEd').innerHTML = [2,3,4,5,6].map(n => `<label>${n} picks <input class="num" type="number" step="0.5" min="1" data-pay="${n}" value="${S.pay[n]}">x</label>`).join('');
   const box = $('#legs');
   if (!S.slip.length) {
@@ -2385,7 +2415,7 @@ function renderParlay(){
       <div class="ls">${esc(l.team)}${l.opp?` vs ${esc(l.opp)}`:''}, ${esc(priceTxt(l))}. Last 10: ${r?`${r.L10.h}/${r.L10.h+r.L10.m}`:'—'}, last 30: ${r?pct(r.L30.pct):'—'}${r&&r.VS.n?`, vs opp ${r.VS.h}/${r.VS.h+r.VS.m}`:''}</div>
       <button class="rm" data-rm="${i}">Remove</button></div>
       <div><div class="lp ${r&&r.prob>=.55?'pos':''}">${r?pct(r.prob):'—'}</div><div class="ls" style="text-align:right">model</div></div></div>`; }).join('');
-  const dec = slipDec(S.slip);
+  const dec = S.scMult > 1 ? S.scMult : slipDec(S.slip);   // what the app really pays, if typed in Slip check
   const pIndep = ev.reduce((m,r)=>m*(r?r.prob:0),1), CI = corrInfo(S.slip);
   const pModel = Math.min(.97, pIndep * CI.factor);
   const pL10 = ev.reduce((m,r)=>m*(r&&isFinite(r.L10.pct)?r.L10.pct:0),1);
@@ -3796,6 +3826,62 @@ function renderAlerts(){
   if ((S.tab === 'today' || S.tab === 'alerts') && unseen) setTimeout(() => { if ((S.tab === 'today' || S.tab === 'alerts') && top[0]) lsSet(LSP+'alertSeen', top[0].a.t); }, 4000);
 }
 
+/* ---------- slip check: is every pick strong enough for what the app pays? ---------- */
+// line types from pick'em apps and books (PrizePicks goblins/demons, discounts, boosts, anchors, alt lines)
+const LTYPES = [
+  ['std','Standard line', '', ''],
+  ['goblin','Goblin (PrizePicks)', 'easy', 'Easier line, so the app pays less for it. Worth it only if its chance beats the “needs” number.'],
+  ['demon','Demon (PrizePicks)', 'hard', 'Harder line that pays more. The chance shown is for this line, not the normal one.'],
+  ['discount','Discount', 'easy', 'Discounted line: easier to hit, smaller payout. Count it as a real pick, not a lock.'],
+  ['boost','Boost', 'hard', 'Boosted payout. Check that the chance at this exact line still clears the bar.'],
+  ['anchor','Anchor', 'other', 'Anchor pick: tagged so the tracker can show how these do for you.'],
+  ['altlow','Alt line (easier)', 'easy', 'Alternate line below the main one: hits more often, pays less.'],
+  ['althigh','Alt line (harder)', 'hard', 'Alternate line above the main one: hits less often, pays more.'],
+  ['promo','Promo / free pick', 'other', 'Promo pick: the app sets the payout, so type the multiplier it shows.']
+];
+const ltypeOf = v => LTYPES.find(t => t[0] === v) || LTYPES[0];
+function legX(l, r){ const p = S.byId[l.pid]; if (!p || !r) return null; const o = l.odds || -110; return {p, k:l.stat, line:l.line, side:l.side, odds:o, r, edge: r.prob - implied(o), score: r.score, book:true, bk:l.bk}; }
+function renderSlipCheck(){
+  const box = $('#scBody'), inp = $('#scMult'); if (!box || !inp) return;
+  const n = S.slip.length, key = S.slip.map(l => `${l.pid}${l.stat}${l.side}`).join('|');
+  if (S.scKey !== key) { S.scKey = key; S.scMult = 0; }
+  if (!n) { box.innerHTML = '<div class="meta" style="margin-top:8px">Add picks from Best bets or the Player tab, then check the slip here.</div>'; $('#scNeed').textContent = ''; if (document.activeElement !== inp) inp.value = ''; return; }
+  const def = n === 1 ? amToDec(S.slip[0].odds || -110) : slipDec(S.slip);
+  const mult = S.scMult > 1 ? S.scMult : def;
+  if (document.activeElement !== inp) inp.value = S.scMult > 1 ? S.scMult : (Math.round(def*100)/100);
+  const need = Math.pow(1/mult, 1/n);
+  $('#scNeed').innerHTML = n > 1 ? `So each pick needs to hit <b>${pct(need)}</b> of the time just to break even.` : `This pick needs to hit <b>${pct(need)}</b> of the time to break even.`;
+  const ev = S.slip.map(legEval);
+  const legs = S.slip.map((l, i) => { const r = ev[i], p = r ? r.prob : 0, x = legX(l, r), v = x ? bbVerdict(x) : null;
+    return {l, r, p, v, ok: p >= need + .03 ? 'g' : p >= need - .02 ? 'y' : 'r'}; });
+  const factor = n > 1 ? corrInfo(S.slip).factor : 1;
+  const chance = Math.min(.97, legs.reduce((m, o) => m*o.p, 1) * factor), val = chance*mult - 1;
+  // best single change: drop one leg (n-1 picks at your normal payout, or a straight bet if one is left)
+  let fix = null;
+  if (n >= 2) legs.forEach((o, i) => {
+    const rest = S.slip.filter((_, j) => j !== i), m2 = rest.length === 1 ? amToDec(rest[0].odds || -110) : (S.pay[rest.length] || 0); if (!m2) return;
+    const c2 = Math.min(.97, legs.filter((_, j) => j !== i).reduce((m, q) => m*q.p, 1) * (rest.length > 1 ? corrInfo(rest).factor : 1)), e2 = c2*m2 - 1;
+    if (!fix || e2 > fix.e) fix = {i, e: e2, m: m2, n: rest.length};
+  });
+  const tone = val >= .05 ? 'g' : val >= 0 ? 'y' : 'r';
+  const word = tone === 'g' ? '🟢 GOOD SLIP' : tone === 'y' ? '🟡 THIN: barely worth it' : '🔴 SKIP THIS SLIP';
+  const weak = legs.filter(o => o.ok === 'r'), unproven = legs.filter(o => !o.v);
+  const per10 = 10*val;
+  let why = `Wins about <b>${pct(chance)}</b> of the time and pays <b>${mult.toFixed(2)}x</b>. On average that’s <b class="${val >= 0 ? 'pos' : 'neg'}">${val >= 0 ? '+' : '−'}$${Math.abs(per10).toFixed(2)}</b> per $10.`;
+  if (weak.length) why += ` ${weak.map(o => `<b>${esc(o.l.name.split(' ').slice(-1)[0])}</b>`).join(' and ')} ${weak.length > 1 ? 'are' : 'is'} below the ${pct(need)} this payout needs.`;
+  const fixHtml = fix && tone !== 'g' && fix.e > val + .03 ? `<div class="sc-fix">✅ <b>Better:</b> drop <b>${esc(S.slip[fix.i].name)}</b>. ${fix.n === 1 ? 'As a single bet' : `As a ${fix.n}-pick at your normal ${fix.m}x payout`}, it’s worth <b>${fix.e >= 0 ? '+' : '−'}$${Math.abs(10*fix.e).toFixed(2)}</b> per $10 instead.</div>` : '';
+  box.innerHTML = `<div class="sc-verdict ${tone}"><div class="big">${word}</div><p>${why}</p>${unproven.length && n > 1 ? `<p class="meta" style="font-size:14px">${unproven.length} of ${n} picks aren’t backed by a winning strategy (not in your Best bets).</p>` : ''}</div>
+    ${legs.map(o => { const ic = o.ok === 'g' ? '✅' : o.ok === 'y' ? '⚠️' : '❌';
+      const st = o.v ? `${o.v.tone === 'g' ? '🟢 Proven pick' : '🟡 Small-bet pick'}: ${esc(o.v.st.n)}` : 'Not a proven pick';
+      const lt = ltypeOf(o.l.ltype), i = S.slip.indexOf(o.l);
+      return `<div class="sc-leg ${o.ok}"><span class="ic">${ic}</span><div style="min-width:0;flex:1"><div class="t">${esc(o.l.name)} <span class="${o.l.side === 'over' ? 'side-o' : 'side-u'}">${o.l.side === 'over' ? 'OVER' : 'UNDER'} ${o.l.line}</span> ${esc(statWord(o.l.stat))}${lt[0] !== 'std' ? `<span class="sc-tag ${lt[2]}">${esc(lt[1])}</span>` : ''}</div>
+        <div class="s">Chance it hits <b style="color:var(--ink)">${o.r ? pct(o.p) : '\u2014'}</b> (needs ${pct(need)})${o.r ? `. Last 10: ${o.r.L10.h} of ${o.r.L10.h + o.r.L10.m}` : ''}. ${st}.</div>
+        <div class="sc-ctl"><label>Your line <input class="num" type="number" step="0.5" min="0" data-scl="${i}" value="${o.l.line}" inputmode="decimal"></label>
+          <select class="ghost" data-sct="${i}" aria-label="Line type">${LTYPES.map(t => `<option value="${t[0]}" ${(o.l.ltype || 'std') === t[0] ? 'selected' : ''}>${esc(t[1])}</option>`).join('')}</select></div>
+        ${lt[3] ? `<div class="sc-hint">${esc(lt[3])}</div>` : ''}</div></div>`; }).join('')}
+    ${fixHtml}`;
+}
+
 /* ---------- Best bets: simple verdict cards backed by the Strategy lab record ---------- */
 let bbRows = [], bbMore = false, SREC = {key:'', v:{}};
 const PROVEN_N = 300, OK_N = 100;
@@ -4241,6 +4327,12 @@ function renderAll(){
 /* ---------- events ---------- */
 $$('.tab').forEach(b => b.addEventListener('click', () => setTab(b.dataset.tab)));
 $('#fab').addEventListener('click', () => setTab('parlay'));
+$('#scBody').addEventListener('change', e => {
+  const li = e.target.closest('[data-scl]'), ti = e.target.closest('[data-sct]');
+  if (li) { const l = S.slip[+li.dataset.scl], v = parseFloat(li.value); if (l && v >= 0) { l.line = v; saveSlip(); renderParlay(); } return; }
+  if (ti) { const l = S.slip[+ti.dataset.sct]; if (l) { l.ltype = ti.value === 'std' ? undefined : ti.value; saveSlip(); renderSlipCheck(); } }
+});
+$('#scMult').addEventListener('input', e => { const v = parseFloat(e.target.value); S.scMult = v > 1 ? v : 0; renderParlay(); });
 $('#zoneMode').addEventListener('click', e => { const b = e.target.closest('[data-zm]'); if (!b) return; S.zm = b.dataset.zm; renderZones(S.byId[S.pid]); });
 if (location.hash === '#alerts') setTimeout(() => setTab('alerts'), 300);
 window.addEventListener('hashchange', () => { if (location.hash === '#alerts') setTab('alerts'); });
