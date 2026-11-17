@@ -622,6 +622,8 @@ main{padding-bottom:90px}
 .sc-tag{display:inline-block;font-size:12px;font-weight:800;padding:1px 8px;border-radius:999px;margin-left:6px;vertical-align:2px}
 .sc-tag.easy{background:var(--over-soft);color:var(--over)} .sc-tag.hard{background:var(--under-soft);color:var(--under)} .sc-tag.other{background:var(--panel);color:var(--muted);border:1px solid var(--line)}
 .sc-hint{font-size:13px;color:var(--muted);margin-top:4px}
+.sp-tag{display:inline-block;font-size:11px;font-weight:800;padding:1px 6px;border-radius:6px;background:var(--panel2);color:var(--ball);border:1px solid var(--line);margin-right:5px;vertical-align:1px}
+.sc-ctl input[data-scm]{width:70px}
 .sc-fix{margin-top:10px;padding:12px;border-radius:12px;background:var(--over-soft);font-size:16px;line-height:1.45}
 
 .an-chart{margin:14px 0 6px;padding-top:14px;border-top:1px solid var(--line)}
@@ -816,7 +818,7 @@ details.inj{margin-top:22px!important}
   }
   firebase.initializeApp(C.firebase);
   const auth = firebase.auth(), fs = firebase.firestore(), PFX = 'sports/' + SPORT_ + '/', owner = String(C.ownerEmail || '').trim().toLowerCase();
-  const db = { doc: p => fs.doc(PFX + p), collection: p => fs.collection(PFX + p) };
+  const db = { doc: p => fs.doc(PFX + p), collection: p => fs.collection(PFX + p), root: { doc: p => fs.doc(p), collection: p => fs.collection(p) } };
   window.claude = { use: async name => {
     const u = auth.currentUser;
     if (name === 'db') return u ? db : null;
@@ -1154,7 +1156,7 @@ details.inj{margin-top:22px!important}
   <section class="view" id="view-parlay" hidden>
     <div class="panel" id="slipCheck">
       <h2>Slip check</h2>
-      <p class="sub">Before you place it: type what your app pays for this slip (the multiplier on the entry screen, like 1.81x). For each pick, set the exact line you got and its type (goblin, demon, discount, boost, anchor, alt line). It tells you if every pick is strong enough for that payout.</p>
+      <p class="sub">Before you place it: type what your app pays for this slip (the multiplier on the entry screen, like 1.81x). For each pick, set the exact line you got, its own multiplier if your app shows one (like 1.10x), and its type (goblin, demon, discount, boost, anchor, alt line). It tells you if every pick is strong enough for that payout.</p>
       <div class="sc-pay"><label>My app pays <input class="num" type="number" step="0.01" min="1.01" id="scMult" inputmode="decimal" aria-label="Payout multiplier"> x</label><span class="meta" id="scNeed"></span></div>
       <div id="scBody"></div>
     </div>
@@ -1183,7 +1185,7 @@ details.inj{margin-top:22px!important}
   <section class="view" id="view-tracker" hidden>
     <div class="panel">
       <h2>Your bets</h2>
-      <p class="sub" id="trackSub">Mark each saved parlay as it settles to see whether the model’s chances hold up.</p>
+      <p class="sub" id="trackSub">Every sport in one place: NBA, NFL, NHL and MLB parlays, including mixed ones. Each pick is graded when its sport’s page loads the latest games.</p>
       <div class="stats4" id="trackStats"></div>
       <div class="chart-box sm"><canvas id="pnlChart" aria-label="Profit over time"></canvas></div>
       <div class="ctrl-row" style="margin-top:12px;margin-bottom:0"><button class="btn" id="gradeBtn" style="width:auto">✓ Check results</button><button class="btn sec" id="pdfBtn" style="width:auto" hidden>⬇ Today’s bets (PDF)</button><button class="btn sec" id="resBtn" style="width:auto" aria-expanded="false" aria-controls="resWrap">Results table</button><span class="meta" id="gradeInfo"></span></div>
@@ -1390,7 +1392,7 @@ const S = {
   defWin: [5,10,15,30,82].includes(lsGet(LSP+'defWin')) ? lsGet(LSP+'defWin') : 30, defPos: lsGet(LSP+'defPos') || 'all', calibOn: lsGet(LSP+'calibOn') !== false, learnOn: lsGet(LSP+'learnOn') !== false, fmode: lsGet(LSP+'fmode') || 'board', strat: lsGet(LSP+'strat') || 'all', grades: lsGet(LSP+'grades') || ['A','B','C','D'], day: null, oddsFmt: lsGet(LSP+'oddsFmt') || 'am', dstat:CFG.dstats[0], dsort:CFG.dstats[0], outMan: lsGet(LSP+'out') || {},
   book: lsGet(LSP+'book') || 'any', lineBk: null,
   pay: Object.assign({2:3, 3:5, 4:10, 5:20, 6:37.5}, lsGet(LSP+'pay') || {}),
-  slip: lsGet(LSP+'slip') || [],
+  slip: (window.__WEBAPP ? lsGet('proplab:xslip') : null) || lsGet(LSP+'slip') || [],
   slips: lsGet(LSP+'slips') || [],
   stake: 10,
   f: Object.assign({stats:CFG.finder.slice(), hit:70, l30:60, prob:55, side:'both', lines:'all', today:'all', sort:'score', dir:-1, legs:3}, lsGet(LSP+'f')||{}),
@@ -1574,7 +1576,7 @@ function setData(d, source, importedAt){
     selectPlayer(pref.id, true);
   } else selectPlayer(S.pid, true);
   // drop slip legs whose players vanished
-  S.slip = S.slip.filter(l => S.byId[l.pid]); saveSlip();
+  S.slip = S.slip.filter(l => (l.sport && l.sport !== SPORT) || S.byId[l.pid]); saveSlip();
   setTimeout(autoGrade, 300);
   setTimeout(labSync, 2500);
   renderBadge(); renderAll();
@@ -2119,7 +2121,7 @@ function renderAnalyzer(){
     ['Spread of results (SD)', f1(r.sd)],
     ['Sharp market (Pinnacle or Novig)', (() => { const sh = sharpFor(p, S.stat, S.side); if (!sh) return '—'; const d = r.prob - sh.fair; return sh.line === S.line ? `${pct(sh.fair)} fair at ${sh.line}, model ${d>=0?'+':''}${(d*100).toFixed(0)} pts ${Math.abs(d) > .12 ? '<span class="neg">(big gap: double-check)</span>' : ''}` : `${pct(sh.fair)} fair at ${sh.line} (different line)`; })()]
   ].map(([k,v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('');
-  const inSlip = S.slip.find(l => l.pid===p.id && l.stat===S.stat);
+  const inSlip = S.slip.find(l => mine(l) && l.pid===p.id && l.stat===S.stat);
   const noLine = !entries(p, S.stat).length; $('#addBtn').disabled = noLine;
   $('#addBtn').textContent = noLine ? 'No book line to add' : inSlip ? (inSlip.side===S.side && inSlip.line===S.line ? 'In your parlay' : 'Update leg in parlay') : 'Add to parlay';
 
@@ -2331,16 +2333,32 @@ function drawHist(vals, line, side){
 }
 
 /* ---------- slip ---------- */
-function saveSlip(){ lsSet(LSP+'slip', S.slip); renderSlipBadges(); }
+function saveSlip(){
+  // stamp legs from this sport with what other sport pages need to show them (chance, last 10, proven or not)
+  S.slip.forEach(l => {
+    const pl = S.byId[l.pid]; if (!l.sport && pl) l.sport = SPORT;
+    if (l.sport !== SPORT || !pl) return;
+    try { const r = evalProp(pl, l.stat, l.line, l.side), x = legX(l, r), v = x ? bbVerdict(x) : null;
+      l.pr = r.prob; l.l10 = [r.L10.h, r.L10.h + r.L10.m]; l.sw = statWord(l.stat); l.date = (pl.next && pl.next.date) || l.date || '';
+      l.pv = v ? v.tone : ''; l.pvn = v ? v.st.n : ''; } catch(e){}
+  });
+  lsSet(window.__WEBAPP ? 'proplab:xslip' : LSP+'slip', S.slip); renderSlipBadges();
+}
+window.addEventListener('storage', e => { if (e.key === 'proplab:xslip' && window.__WEBAPP) { S.slip = lsGet('proplab:xslip') || []; renderSlipBadges(); if (S.tab === 'parlay') renderParlay(); } });
 function legFromCurrent(){
   const p = S.byId[S.pid]; return {pid:p.id, name:p.name, team:p.team, opp:p.next?p.next.opp:null, stat:S.stat, side:S.side, line:S.line, odds:S.odds, book:S.lineIsBook, bk: S.lineIsBook ? S.lineBk : null, dfs: !!(S.lineIsBook && S.lineBk && DFS.has(S.lineBk))};
 }
 function addLeg(leg){
-  const i = S.slip.findIndex(l => l.pid===leg.pid && l.stat===leg.stat);
+  const i = S.slip.findIndex(l => mine(l) && l.pid===leg.pid && l.stat===leg.stat);
   if (i>=0) { S.slip[i] = leg; toast('Leg updated'); } else { S.slip.push(leg); toast(`Added ${leg.name.split(' ').slice(-1)[0]} ${leg.side} ${leg.line} ${leg.stat}`); }
   saveSlip();
 }
-function legEval(l){ const p = S.byId[l.pid]; if (!p) return null; return evalProp(p, l.stat, l.line, l.side); }
+const mine = l => !l.sport || l.sport === SPORT;   // a parlay pick from this page's sport
+function legEval(l){ if (l.sport && l.sport !== SPORT) return legStub(l); const p = S.byId[l.pid]; if (!p) return null; return evalProp(p, l.stat, l.line, l.side); }
+// a pick from another sport: use the chance saved when it was added on that sport's page
+function legStub(l){ const pr = isFinite(l.pr) ? l.pr : .5, h = l.l10 ? l.l10[0] : 0, n = l.l10 ? l.l10[1] : 0, e = {h:0, m:0, n:0, pct:NaN, seq:[]};
+  return {prob: pr, probRaw: pr, score: pr, L10: {h, m: n - h, n, pct: n ? h/n : NaN, seq: []}, L30: e, VS: e, other: true}; }
+function userMult(){ const n = S.slip.length; if (n && S.slip.every(l => l.m > 1)) return S.slip.reduce((a, l) => a*l.m, 1); return S.scMult > 1 ? S.scMult : 0; }
 function renderSlipBadges(){
   const n = S.slip.length; const c = $('#tabCount'); c.hidden = !n; c.textContent = n;
   const fab = $('#fab');
@@ -2361,11 +2379,11 @@ function renderParlay(){
   $('#saveSlip').disabled = false;
   const ev = S.slip.map(legEval);
   box.innerHTML = S.slip.map((l,i) => { const r = ev[i]; return `<div class="leg">
-      <div><div class="lt"><a href="#" class="plink" data-pcard="${esc(l.pid)}">${esc(l.name)}</a> <span class="${l.side==='over'?'side-o':'side-u'}">${l.side==='over'?'Over':'Under'} ${l.line}</span> ${l.stat}</div>
+      <div><div class="lt">${l.sport && l.sport !== SPORT ? `<b class="sp-tag">${esc(l.sport.toUpperCase())}</b>${esc(l.name)}` : `<a href="#" class="plink" data-pcard="${esc(l.pid)}">${esc(l.name)}</a>`} <span class="${l.side==='over'?'side-o':'side-u'}">${l.side==='over'?'Over':'Under'} ${l.line}</span> ${l.stat}</div>
       <div class="ls">${esc(l.team)}${l.opp?` vs ${esc(l.opp)}`:''}, ${esc(priceTxt(l))}. Last 10: ${r?`${r.L10.h}/${r.L10.h+r.L10.m}`:'—'}, last 30: ${r?pct(r.L30.pct):'—'}${r&&r.VS.n?`, vs opp ${r.VS.h}/${r.VS.h+r.VS.m}`:''}</div>
       <button class="rm" data-rm="${i}">Remove</button></div>
       <div><div class="lp ${r&&r.prob>=.55?'pos':''}">${r?pct(r.prob):'—'}</div><div class="ls" style="text-align:right">model</div></div></div>`; }).join('');
-  const dec = S.scMult > 1 ? S.scMult : slipDec(S.slip);   // what the app really pays, if typed in Slip check
+  const dec = userMult() || slipDec(S.slip);   // what the app really pays, if typed in Slip check
   const pIndep = ev.reduce((m,r)=>m*(r?r.prob:0),1), CI = corrInfo(S.slip);
   const pModel = Math.min(.97, pIndep * CI.factor);
   const pL10 = ev.reduce((m,r)=>m*(r&&isFinite(r.L10.pct)?r.L10.pct:0),1);
@@ -2387,7 +2405,7 @@ function renderParlay(){
   });
   const joint = jointHistory(S.slip);
   if (joint) notes.push(`<div class="note ${joint.pct>=.5?'good':'warn'}">These legs share a schedule. All of them hit together in <b>${joint.h} of the last ${joint.n}</b> shared games (${pct(joint.pct)}), which captures how they move together better than multiplying.</div>`);
-  const dupP = S.slip.map(l=>l.pid).filter((x,i,a)=>a.indexOf(x)!==i);
+  const dupP = S.slip.map(l=>(l.sport||SPORT)+':'+l.pid).filter((x,i,a)=>a.indexOf(x)!==i);
   if (dupP.length) notes.push(`<div class="note warn">Same player in more than one leg. Those legs are linked, so the combined chance above is less reliable, and many books won’t allow it.</div>`);
   const weak = ev.map((r,i)=>[r?r.prob:0,i]).sort((a,b)=>a[0]-b[0])[0];
   if (S.slip.length>1 && weak[0] < .55) notes.push(`<div class="note bad">Weakest leg: <b>${esc(S.slip[weak[1]].name)} ${S.slip[weak[1]].stat}</b> at ${pct(weak[0])}. Dropping it raises the model chance to ${pct(pModel/Math.max(weak[0],1e-9),1)}.</div>`);
@@ -2402,6 +2420,7 @@ function renderParlay(){
 }
 // how two legs in the same game move together, from games they shared (teammates, or these two teams facing each other)
 function pairLift(a, b){
+  if (!mine(a) || !mine(b)) return null;
   const A = S.byId[a.pid], B = S.byId[b.pid]; if (!A || !B || a.pid === b.pid) return null;
   const same = A.team === B.team, opp = (A.next && A.next.opp === B.team) || a.opp === B.team;
   if (!same && !opp) return null;
@@ -2424,6 +2443,7 @@ function corrInfo(legs){
   return {pairs, factor: Math.max(.4, Math.min(2.5, f))};
 }
 function jointHistory(legs){
+  legs = legs.filter(mine);
   if (legs.length < 2) return null;
   const maps = legs.map(l => { const p = S.byId[l.pid]; const m = {}; if (p) p.games.forEach(g => m[g.d] = g); return m; });
   let dates = Object.keys(maps[0]); maps.slice(1).forEach(m => { dates = dates.filter(d => m[d]); });
@@ -2635,7 +2655,7 @@ function renderFinder(){
   const cols = [['name','Player'],['','Prop'],['','Odds'],['l5','L5'],['l10','L10'],['l30','L30'],['vs','Vs opp'],['prob','Model'],['edge','Edge'],['score','Score'],['','']];
   const head = `<thead><tr>${cols.map(([k,t]) => `<th class="${k?'sortable':''} ${['l5','l10','l30','vs','prob','edge','score'].includes(k)?'r':''}" ${k?`data-sort="${k}"`:''}>${t}${f.sort===k?(f.dir<0?' ▾':' ▴'):''}</th>`).join('')}</tr></thead>`;
   const body = rows.slice(0, 150).map((x,i) => {
-    const inS = S.slip.some(l => l.pid===x.p.id && l.stat===x.k && l.side===x.side && l.line===x.line);
+    const inS = S.slip.some(l => mine(l) && l.pid===x.p.id && l.stat===x.k && l.side===x.side && l.line===x.line);
     return `<tr><td><a href="#" class="pname plink" data-pcard="${esc(x.p.id)}">${esc(x.p.name)}</a><div class="meta" style="font-size:12px">${esc(x.p.team)}${x.p.next?` ${x.p.next.home?'vs':'@'} ${esc(x.p.next.opp)}, ${esc(gameWhen(x.p.next))}`:''}</div></td>
       <td><span class="${x.side==='over'?'side-o':'side-u'}">${x.side==='over'?'O':'U'} ${x.line}</span> ${x.k}</td>
       <td>${esc(priceTxt(x))}</td>
@@ -2678,14 +2698,20 @@ function autoBuild(){
 
 /* ---------- tracker ---------- */
 function slipSummary(){
-  const dec = slipDec(S.slip);
+  const dec = userMult() || slipDec(S.slip);
   const pModel = S.slip.map(legEval).reduce((m,r)=>m*(r?r.prob:0),1);
   return {dec, pModel};
+}
+async function migrateSlips(oldCol, newCol){
+  const k = LSP + 'slipsMoved'; if (lsGet(k)) return;
+  try { const snap = await oldCol.get();
+    for (const d of snap.docs) { const x = d.data(); if (!x || !x.id) continue; const ref = newCol.doc(x.id); const ex = await ref.get(); if (!ex.exists) await ref.set(Object.assign({}, x, {sport: x.sport || SPORT})); }
+    lsSet(k, true); } catch(e){}
 }
 async function saveToTracker(){
   if (!S.slip.length) return;
   const {dec, pModel} = slipSummary();
-  const slip = {id:'s'+Date.now().toString(36), at:new Date().toISOString(), legs:S.slip.map(l=>({name:l.name, team:l.team, stat:l.stat, side:l.side, line:l.line, odds:l.odds, date:(S.byId[l.pid] && S.byId[l.pid].next && S.byId[l.pid].next.date) || ''})), dec, stake:S.stake, pModel, status:'pending', sample: S.source==='sample'};
+  const slip = {id:'s'+Date.now().toString(36), at:new Date().toISOString(), legs:S.slip.map(l=>({name:l.name, team:l.team, stat:l.stat, side:l.side, line:l.line, odds:l.odds, sport: l.sport || SPORT, ...(l.m ? {m: l.m} : {}), ...(l.ltype ? {ltype: l.ltype} : {}), date:(S.byId[l.pid] && S.byId[l.pid].next && S.byId[l.pid].next.date) || l.date || ''})), dec, stake:S.stake, pModel, status:'pending', sample: S.source==='sample'};
   if (cloud) { try { await cloud.slipsCol.doc(slip.id).set(slip); toast('Saved to tracker'); return; } catch(e){ /* fall back */ } }
   S.slips.unshift(slip); lsSet(LSP+'slips', S.slips); toast('Saved to tracker'); renderTracker();
 }
@@ -2706,8 +2732,10 @@ async function autoGrade(){
       const needStatus = s.status === 'pending';
       const needLegs = !Array.isArray(s.results) || s.results.length !== s.legs.length || s.results.some(r => !r || r.res === 'na');
       if (!needStatus && !needLegs) continue;
-      const res = s.legs.map(l => {
-        const p = byName[normName(l.name)]; if (!p || !STATS[l.stat]) return {res:'na'};
+      const res = s.legs.map((l, li) => {
+        const prev = s.results && s.results[li], ls = l.sport || s.sport || SPORT;
+        if (ls !== SPORT) return prev || {res:'na'};
+        const p = byName[normName(l.name)]; if (!p || !STATS[l.stat]) return prev && prev.res !== 'na' ? prev : {res:'na'};
         const d0 = l.date || ymd(new Date(s.at));
         const g = [...p.games].reverse().find(g => g.d >= d0);
         const firstTeamDay = [...(teamDays[l.team] || [])].filter(d => d >= d0).sort()[0];
@@ -3290,7 +3318,7 @@ function renderTracker(){
       <div class="meta">${new Date(s.at).toLocaleString([], {month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})}, $${s.stake} to pay ${money(s.stake*s.dec)}, model ${pct(s.pModel,1)}${s.sample?', sample data':''}</div>
       <ul class="legs-res">${s.legs.map((l,i)=>{ const r = s.results && s.results[i]; const k = r ? r.res : 'pend';
         const ic = k==='hit' ? '\u2713' : k==='miss' ? '\u2717' : k==='void' ? '\u2013' : '?';
-        return `<li class="${k}"><span class="ic" aria-label="${k==='hit'?'hit':k==='miss'?'missed':k==='void'?'void':'not graded yet'}">${ic}</span><span class="lg">${esc(l.name)} <span class="meta">${l.team ? esc(l.team) + ', ' : ''}${l.side==='over'?'Over':'Under'} ${l.line} ${esc(l.stat)}, ${fmtOdds(l.odds)}</span></span><span class="got">${r && r.v!=null ? `had ${r.v}` : k==='void' ? 'did not play' : ''}</span></li>`; }).join('')}</ul>
+        return `<li class="${k}"><span class="ic" aria-label="${k==='hit'?'hit':k==='miss'?'missed':k==='void'?'void':'not graded yet'}">${ic}</span><span class="lg">${l.sport ? `<b class="sp-tag">${esc(String(l.sport).toUpperCase())}</b>` : ''}${esc(l.name)} <span class="meta">${l.team ? esc(l.team) + ', ' : ''}${l.ltype ? esc(ltypeOf(l.ltype)[1]) + ', ' : ''}${l.m ? l.m + 'x, ' : ''}${l.side==='over'?'Over':'Under'} ${l.line} ${esc(l.stat)}, ${fmtOdds(l.odds)}</span></span><span class="got">${r && r.v!=null ? `had ${r.v}` : k==='void' ? 'did not play' : ''}</span></li>`; }).join('')}</ul>
       <div class="slip-actions"><button class="won" data-st="won" data-id="${s.id}" aria-pressed="${s.status==='won'}">Hit</button><button class="lost" data-st="lost" data-id="${s.id}" aria-pressed="${s.status==='lost'}">Missed</button><button data-edit="${s.id}">Edit bet</button><button data-del="${s.id}">Delete</button></div>
       <div class="slip-edit" data-form="${s.id}" hidden>
         <label>Stake ($)<input class="num" type="number" inputmode="decimal" min="0" step="1" value="${s.stake}" data-in-stake></label>
@@ -3377,9 +3405,9 @@ function computeToday(){
   }
   return {pool:pool.length, anyNext};
 }
-const inSlipX = x => S.slip.some(l => l.pid===x.p.id && l.stat===x.k && l.side===x.side && l.line===x.line);
+const inSlipX = x => S.slip.some(l => mine(l) && l.pid===x.p.id && l.stat===x.k && l.side===x.side && l.line===x.line);
 function toggleX(x){
-  const i = S.slip.findIndex(l => l.pid===x.p.id && l.stat===x.k && l.side===x.side && l.line===x.line);
+  const i = S.slip.findIndex(l => mine(l) && l.pid===x.p.id && l.stat===x.k && l.side===x.side && l.line===x.line);
   if (i >= 0) { S.slip.splice(i,1); saveSlip(); toast('Removed from parlay'); } else addLeg(rowToLeg(x));
 }
 function openX(x){ S.stat = x.k; S.side = x.side; selectPlayer(x.p.id, true); S.line = x.line; S.odds = x.odds; S.lineIsBook = x.book; S.lineBk = x.bk || null; setTab('analyzer'); }
@@ -3797,19 +3825,21 @@ function renderSlipCheck(){
   if (S.scKey !== key) { S.scKey = key; S.scMult = 0; }
   if (!n) { box.innerHTML = '<div class="meta" style="margin-top:8px">Add picks from Best bets or the Player tab, then check the slip here.</div>'; $('#scNeed').textContent = ''; if (document.activeElement !== inp) inp.value = ''; return; }
   const def = n === 1 ? amToDec(S.slip[0].odds || -110) : slipDec(S.slip);
-  const mult = S.scMult > 1 ? S.scMult : def;
-  if (document.activeElement !== inp) inp.value = S.scMult > 1 ? S.scMult : (Math.round(def*100)/100);
-  const need = Math.pow(1/mult, 1/n);
-  $('#scNeed').innerHTML = n > 1 ? `So each pick needs to hit <b>${pct(need)}</b> of the time just to break even.` : `This pick needs to hit <b>${pct(need)}</b> of the time to break even.`;
+  const allM = S.slip.every(l => l.m > 1);
+  const mult = userMult() || def;
+  inp.readOnly = allM;
+  if (document.activeElement !== inp || allM) inp.value = allM ? Math.round(mult*100)/100 : S.scMult > 1 ? S.scMult : (Math.round(def*100)/100);
+  const need = Math.pow(1/mult, 1/n), needOf = l => allM ? 1/l.m : need;
+  $('#scNeed').innerHTML = allM ? `From your per-pick multipliers. Each pick needs to beat 1 \u00F7 its own multiplier (1.10x needs <b>${pct(1/1.1)}</b>).` : n > 1 ? `So each pick needs to hit <b>${pct(need)}</b> of the time just to break even.` : `This pick needs to hit <b>${pct(need)}</b> of the time to break even.`;
   const ev = S.slip.map(legEval);
-  const legs = S.slip.map((l, i) => { const r = ev[i], p = r ? r.prob : 0, x = legX(l, r), v = x ? bbVerdict(x) : null;
-    return {l, r, p, v, ok: p >= need + .03 ? 'g' : p >= need - .02 ? 'y' : 'r'}; });
+  const legs = S.slip.map((l, i) => { const r = ev[i], p = r ? r.prob : 0, other = l.sport && l.sport !== SPORT, x = other ? null : legX(l, r), v = x ? bbVerdict(x) : (other && l.pv ? {tone: l.pv, st: {n: l.pvn}} : null), nd = needOf(l);
+    return {l, r, p, v, nd, other, ok: p >= nd + .03 ? 'g' : p >= nd - .02 ? 'y' : 'r'}; });
   const factor = n > 1 ? corrInfo(S.slip).factor : 1;
   const chance = Math.min(.97, legs.reduce((m, o) => m*o.p, 1) * factor), val = chance*mult - 1;
   // best single change: drop one leg (n-1 picks at your normal payout, or a straight bet if one is left)
   let fix = null;
   if (n >= 2) legs.forEach((o, i) => {
-    const rest = S.slip.filter((_, j) => j !== i), m2 = rest.length === 1 ? amToDec(rest[0].odds || -110) : (S.pay[rest.length] || 0); if (!m2) return;
+    const rest = S.slip.filter((_, j) => j !== i), m2 = allM ? rest.reduce((a, l) => a*l.m, 1) : rest.length === 1 ? amToDec(rest[0].odds || -110) : (S.pay[rest.length] || 0); if (!m2) return;
     const c2 = Math.min(.97, legs.filter((_, j) => j !== i).reduce((m, q) => m*q.p, 1) * (rest.length > 1 ? corrInfo(rest).factor : 1)), e2 = c2*m2 - 1;
     if (!fix || e2 > fix.e) fix = {i, e: e2, m: m2, n: rest.length};
   });
@@ -3817,16 +3847,16 @@ function renderSlipCheck(){
   const word = tone === 'g' ? '🟢 GOOD SLIP' : tone === 'y' ? '🟡 THIN: barely worth it' : '🔴 SKIP THIS SLIP';
   const weak = legs.filter(o => o.ok === 'r'), unproven = legs.filter(o => !o.v);
   const per10 = 10*val;
-  let why = `Wins about <b>${pct(chance)}</b> of the time and pays <b>${mult.toFixed(2)}x</b>. On average that’s <b class="${val >= 0 ? 'pos' : 'neg'}">${val >= 0 ? '+' : '−'}$${Math.abs(per10).toFixed(2)}</b> per $10.`;
-  if (weak.length) why += ` ${weak.map(o => `<b>${esc(o.l.name.split(' ').slice(-1)[0])}</b>`).join(' and ')} ${weak.length > 1 ? 'are' : 'is'} below the ${pct(need)} this payout needs.`;
-  const fixHtml = fix && tone !== 'g' && fix.e > val + .03 ? `<div class="sc-fix">✅ <b>Better:</b> drop <b>${esc(S.slip[fix.i].name)}</b>. ${fix.n === 1 ? 'As a single bet' : `As a ${fix.n}-pick at your normal ${fix.m}x payout`}, it’s worth <b>${fix.e >= 0 ? '+' : '−'}$${Math.abs(10*fix.e).toFixed(2)}</b> per $10 instead.</div>` : '';
+  let why = `Wins about <b>${pct(chance)}</b> of the time and pays <b>${(Math.round(mult*100)/100).toFixed(2)}x</b>. On average that’s <b class="${val >= 0 ? 'pos' : 'neg'}">${val >= 0 ? '+' : '−'}$${Math.abs(per10).toFixed(2)}</b> per $10.`;
+  if (weak.length) why += ` ${weak.map(o => `<b>${esc(o.l.name.split(' ').slice(-1)[0])}</b>`).join(' and ')} ${weak.length > 1 ? 'are' : 'is'} below what ${weak.length > 1 ? 'their payouts need' : 'its payout needs'}.`;
+  const fixHtml = fix && tone !== 'g' && fix.e > val + .03 ? `<div class="sc-fix">✅ <b>Better:</b> drop <b>${esc(S.slip[fix.i].name)}</b>. ${allM ? `The other ${fix.n === 1 ? 'pick pays' : `${fix.n} picks pay`} ${fix.m.toFixed(2)}x` : fix.n === 1 ? 'As a single bet' : `As a ${fix.n}-pick at your normal ${fix.m}x payout`}, it’s worth <b>${fix.e >= 0 ? '+' : '−'}$${Math.abs(10*fix.e).toFixed(2)}</b> per $10 instead.</div>` : '';
   box.innerHTML = `<div class="sc-verdict ${tone}"><div class="big">${word}</div><p>${why}</p>${unproven.length && n > 1 ? `<p class="meta" style="font-size:14px">${unproven.length} of ${n} picks aren’t backed by a winning strategy (not in your Best bets).</p>` : ''}</div>
     ${legs.map(o => { const ic = o.ok === 'g' ? '✅' : o.ok === 'y' ? '⚠️' : '❌';
       const st = o.v ? `${o.v.tone === 'g' ? '🟢 Proven pick' : '🟡 Small-bet pick'}: ${esc(o.v.st.n)}` : 'Not a proven pick';
       const lt = ltypeOf(o.l.ltype), i = S.slip.indexOf(o.l);
-      return `<div class="sc-leg ${o.ok}"><span class="ic">${ic}</span><div style="min-width:0;flex:1"><div class="t">${esc(o.l.name)} <span class="${o.l.side === 'over' ? 'side-o' : 'side-u'}">${o.l.side === 'over' ? 'OVER' : 'UNDER'} ${o.l.line}</span> ${esc(statWord(o.l.stat))}${lt[0] !== 'std' ? `<span class="sc-tag ${lt[2]}">${esc(lt[1])}</span>` : ''}</div>
-        <div class="s">Chance it hits <b style="color:var(--ink)">${o.r ? pct(o.p) : '\u2014'}</b> (needs ${pct(need)})${o.r ? `. Last 10: ${o.r.L10.h} of ${o.r.L10.h + o.r.L10.m}` : ''}. ${st}.</div>
-        <div class="sc-ctl"><label>Your line <input class="num" type="number" step="0.5" min="0" data-scl="${i}" value="${o.l.line}" inputmode="decimal"></label>
+      return `<div class="sc-leg ${o.ok}"><span class="ic">${ic}</span><div style="min-width:0;flex:1"><div class="t">${o.other ? `<b class="sp-tag">${esc(o.l.sport.toUpperCase())}</b>` : ''}${esc(o.l.name)} <span class="${o.l.side === 'over' ? 'side-o' : 'side-u'}">${o.l.side === 'over' ? 'OVER' : 'UNDER'} ${o.l.line}</span> ${esc(o.l.sw || statWord(o.l.stat))}${lt[0] !== 'std' ? `<span class="sc-tag ${lt[2]}">${esc(lt[1])}</span>` : ''}</div>
+        <div class="s">Chance it hits <b style="color:var(--ink)">${o.r ? pct(o.p) : '\u2014'}</b> (needs ${pct(o.nd)}${o.l.m > 1 ? ` at ${o.l.m}x` : ''})${o.other ? ', saved from its own page' : ''}${o.r && o.r.L10.n ? `. Last 10: ${o.r.L10.h} of ${o.r.L10.h + o.r.L10.m}` : ''}. ${st}.</div>
+        <div class="sc-ctl"><label>Your line <input class="num" type="number" step="0.5" min="0" data-scl="${i}" value="${o.l.line}" inputmode="decimal"${o.other ? ' disabled title="Change it on that sport\u2019s page"' : ''}></label><label>Pays <input class="num" type="number" step="0.01" min="1" data-scm="${i}" value="${o.l.m || ''}" placeholder="1.10" inputmode="decimal">x</label>
           <select class="ghost" data-sct="${i}" aria-label="Line type">${LTYPES.map(t => `<option value="${t[0]}" ${(o.l.ltype || 'std') === t[0] ? 'selected' : ''}>${esc(t[1])}</option>`).join('')}</select></div>
         ${lt[3] ? `<div class="sc-hint">${esc(lt[3])}</div>` : ''}</div></div>`; }).join('')}
     ${fixHtml}`;
@@ -4127,6 +4157,8 @@ $('#fab').addEventListener('click', () => setTab('parlay'));
 $('#scBody').addEventListener('change', e => {
   const li = e.target.closest('[data-scl]'), ti = e.target.closest('[data-sct]');
   if (li) { const l = S.slip[+li.dataset.scl], v = parseFloat(li.value); if (l && v >= 0) { l.line = v; saveSlip(); renderParlay(); } return; }
+  const mi = e.target.closest('[data-scm]');
+  if (mi) { const l = S.slip[+mi.dataset.scm], v = parseFloat(mi.value); if (l) { if (v > 1) l.m = Math.round(v*100)/100; else delete l.m; saveSlip(); renderParlay(); } return; }
   if (ti) { const l = S.slip[+ti.dataset.sct]; if (l) { l.ltype = ti.value === 'std' ? undefined : ti.value; saveSlip(); renderSlipCheck(); } }
 });
 $('#scMult').addEventListener('input', e => { const v = parseFloat(e.target.value); S.scMult = v > 1 ? v : 0; renderParlay(); });
@@ -4248,7 +4280,7 @@ $('#view-today').addEventListener('click', e => {
 });
 $('#finderTbl').addEventListener('click', e => {
   const s = e.target.closest('[data-sort]'); if (s) { const k=s.dataset.sort; if (S.f.sort===k) S.f.dir*=-1; else { S.f.sort=k; S.f.dir = k==='name'?1:-1; } saveF(); renderFinder(); return; }
-  const a = e.target.closest('[data-add]'); if (a) { const x = finderRows[+a.dataset.add]; const i = S.slip.findIndex(l=>l.pid===x.p.id&&l.stat===x.k&&l.side===x.side&&l.line===x.line); if (i>=0) { S.slip.splice(i,1); saveSlip(); toast('Removed from parlay'); } else addLeg(rowToLeg(x)); renderFinder(); renderSlipBadges(); return; }
+  const a = e.target.closest('[data-add]'); if (a) { const x = finderRows[+a.dataset.add]; const i = S.slip.findIndex(l => mine(l) && l.pid===x.p.id&&l.stat===x.k&&l.side===x.side&&l.line===x.line); if (i>=0) { S.slip.splice(i,1); saveSlip(); toast('Removed from parlay'); } else addLeg(rowToLeg(x)); renderFinder(); renderSlipBadges(); return; }
   const o = e.target.closest('[data-open]'); if (o) { e.preventDefault(); const x = finderRows[+o.dataset.open]; S.stat = x.k; S.side = x.side; selectPlayer(x.p.id, true); S.line = x.line; S.odds = x.odds; S.lineIsBook = x.book; S.lineBk = x.bk || null; setTab('analyzer'); }
 });
 $('#legs').addEventListener('click', e => { const b = e.target.closest('[data-rm]'); if (!b) return; S.slip.splice(+b.dataset.rm,1); saveSlip(); renderParlay(); });
@@ -4550,7 +4582,8 @@ $('#shareChk').addEventListener('change', async e => {
     if ((await user.can('data.write')) === false) return; // view-only visitors keep their tracker on this device
     let assets = null; try { assets = await claude.use('assets'); } catch(e){}
     const stateRef = db.doc(`data/users/${uid}/state`);
-    cloud = {db, assets, uid, stateRef, slipsCol: stateRef.collection('slips'), labCol: stateRef.collection('lab')};
+    cloud = {db, assets, uid, stateRef, slipsCol: db.root ? db.root.collection(`sports/all/data/users/${uid}/slips`) : stateRef.collection('slips'), labCol: stateRef.collection('lab')};
+    if (db.root) await migrateSlips(stateRef.collection('slips'), cloud.slipsCol);
     setTimeout(pushRefresh, 1500);
     // pull this person's own synced file if it's newer than this device's copy
     try {
