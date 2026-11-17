@@ -1157,7 +1157,7 @@ details.inj{margin-top:22px!important}
     <div class="panel" id="slipCheck">
       <h2>Slip check</h2>
       <p class="sub">Before you place it: type what your app pays for this slip (the multiplier on the entry screen, like 1.81x). For each pick, set the exact line you got, its own multiplier if your app shows one (like 1.10x), and its type (goblin, demon, discount, boost, anchor, alt line). It tells you if every pick is strong enough for that payout.</p>
-      <div class="sc-pay"><label>My app pays <input class="num" type="number" step="0.01" min="1.01" id="scMult" inputmode="decimal" aria-label="Payout multiplier"> x</label><span class="meta" id="scNeed"></span></div>
+      <div class="sc-pay"><label>My app pays <input class="num" type="number" step="0.01" min="1.01" id="scMult" inputmode="decimal" aria-label="Payout multiplier"> x</label><label>Profit boost <input class="num" type="number" step="5" min="0" max="300" id="scBoost" inputmode="decimal" placeholder="0" aria-label="Profit boost percent" style="width:76px"> %</label><span class="meta" id="scNeed"></span></div>
       <div id="scBody"></div>
     </div>
     <div class="grid g-main" style="margin-top:0">
@@ -2358,6 +2358,7 @@ function legEval(l){ if (l.sport && l.sport !== SPORT) return legStub(l); const 
 // a pick from another sport: use the chance saved when it was added on that sport's page
 function legStub(l){ const pr = isFinite(l.pr) ? l.pr : .5, h = l.l10 ? l.l10[0] : 0, n = l.l10 ? l.l10[1] : 0, e = {h:0, m:0, n:0, pct:NaN, seq:[]};
   return {prob: pr, probRaw: pr, score: pr, L10: {h, m: n - h, n, pct: n ? h/n : NaN, seq: []}, L30: e, VS: e, other: true}; }
+const boosted = m => m > 1 && S.boost > 0 ? 1 + (m - 1)*(1 + S.boost/100) : m;
 function userMult(){ const n = S.slip.length; if (n && S.slip.every(l => l.m > 1)) return S.slip.reduce((a, l) => a*l.m, 1); return S.scMult > 1 ? S.scMult : 0; }
 function renderSlipBadges(){
   const n = S.slip.length; const c = $('#tabCount'); c.hidden = !n; c.textContent = n;
@@ -2383,7 +2384,7 @@ function renderParlay(){
       <div class="ls">${esc(l.team)}${l.opp?` vs ${esc(l.opp)}`:''}, ${esc(priceTxt(l))}. Last 10: ${r?`${r.L10.h}/${r.L10.h+r.L10.m}`:'—'}, last 30: ${r?pct(r.L30.pct):'—'}${r&&r.VS.n?`, vs opp ${r.VS.h}/${r.VS.h+r.VS.m}`:''}</div>
       <button class="rm" data-rm="${i}">Remove</button></div>
       <div><div class="lp ${r&&r.prob>=.55?'pos':''}">${r?pct(r.prob):'—'}</div><div class="ls" style="text-align:right">model</div></div></div>`; }).join('');
-  const dec = userMult() || slipDec(S.slip);   // what the app really pays, if typed in Slip check
+  const dec = boosted(userMult() || slipDec(S.slip));   // what the app really pays (typed in Slip check), with any profit boost
   const pIndep = ev.reduce((m,r)=>m*(r?r.prob:0),1), CI = corrInfo(S.slip);
   const pModel = Math.min(.97, pIndep * CI.factor);
   const pL10 = ev.reduce((m,r)=>m*(r&&isFinite(r.L10.pct)?r.L10.pct:0),1);
@@ -2698,7 +2699,7 @@ function autoBuild(){
 
 /* ---------- tracker ---------- */
 function slipSummary(){
-  const dec = userMult() || slipDec(S.slip);
+  const dec = boosted(userMult() || slipDec(S.slip));
   const pModel = S.slip.map(legEval).reduce((m,r)=>m*(r?r.prob:0),1);
   return {dec, pModel};
 }
@@ -2711,7 +2712,7 @@ async function migrateSlips(oldCol, newCol){
 async function saveToTracker(){
   if (!S.slip.length) return;
   const {dec, pModel} = slipSummary();
-  const slip = {id:'s'+Date.now().toString(36), at:new Date().toISOString(), legs:S.slip.map(l=>({name:l.name, team:l.team, stat:l.stat, side:l.side, line:l.line, odds:l.odds, sport: l.sport || SPORT, ...(l.m ? {m: l.m} : {}), ...(l.ltype ? {ltype: l.ltype} : {}), date:(S.byId[l.pid] && S.byId[l.pid].next && S.byId[l.pid].next.date) || l.date || ''})), dec, stake:S.stake, pModel, status:'pending', sample: S.source==='sample'};
+  const slip = {id:'s'+Date.now().toString(36), at:new Date().toISOString(), legs:S.slip.map(l=>({name:l.name, team:l.team, stat:l.stat, side:l.side, line:l.line, odds:l.odds, sport: l.sport || SPORT, ...(l.m ? {m: l.m} : {}), ...(l.ltype ? {ltype: l.ltype} : {}), date:(S.byId[l.pid] && S.byId[l.pid].next && S.byId[l.pid].next.date) || l.date || ''})), dec, ...(S.boost > 0 ? {boost: S.boost} : {}), stake:S.stake, pModel, status:'pending', sample: S.source==='sample'};
   if (cloud) { try { await cloud.slipsCol.doc(slip.id).set(slip); toast('Saved to tracker'); return; } catch(e){ /* fall back */ } }
   S.slips.unshift(slip); lsSet(LSP+'slips', S.slips); toast('Saved to tracker'); renderTracker();
 }
@@ -3315,7 +3316,7 @@ function renderTracker(){
   mk('pnlChart', { type:'line', data:{ labels: chron.map(s => fmtDate(s.at.slice(0,10))), datasets:[{data:pts, borderColor:cssv('--ball'), backgroundColor:cssv('--ball-soft'), fill:true, tension:.25, pointRadius:3, pointBackgroundColor: chron.map(s => s.status==='won'?cssv('--over'):cssv('--under'))}] }, options:o });
   $('#slipList').innerHTML = sl.length ? sl.map(s => `<div class="slip-card">
       <div class="hd"><b>${s.legs.length}-leg, ${fmtOdds(decToAm(s.dec))}</b><span class="status ${s.status}">${s.status==='won'?'Hit':s.status==='lost'?'Missed':s.status==='void'?'Void':`Waiting for ${esc(fmtDate((s.legs[0] && s.legs[0].date) || ymd(new Date(s.at))))} games`}${s.graded==='auto'?'<span class="auto">auto</span>':''}</span></div>
-      <div class="meta">${new Date(s.at).toLocaleString([], {month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})}, $${s.stake} to pay ${money(s.stake*s.dec)}, model ${pct(s.pModel,1)}${s.sample?', sample data':''}</div>
+      <div class="meta">${new Date(s.at).toLocaleString([], {month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})}, $${s.stake} to pay ${money(s.stake*s.dec)}${s.boost ? ` (with ${s.boost}% boost)` : ''}, model ${pct(s.pModel,1)}${s.sample?', sample data':''}</div>
       <ul class="legs-res">${s.legs.map((l,i)=>{ const r = s.results && s.results[i]; const k = r ? r.res : 'pend';
         const ic = k==='hit' ? '\u2713' : k==='miss' ? '\u2717' : k==='void' ? '\u2013' : '?';
         return `<li class="${k}"><span class="ic" aria-label="${k==='hit'?'hit':k==='miss'?'missed':k==='void'?'void':'not graded yet'}">${ic}</span><span class="lg">${l.sport ? `<b class="sp-tag">${esc(String(l.sport).toUpperCase())}</b>` : ''}${esc(l.name)} <span class="meta">${l.team ? esc(l.team) + ', ' : ''}${l.ltype ? esc(ltypeOf(l.ltype)[1]) + ', ' : ''}${l.m ? l.m + 'x, ' : ''}${l.side==='over'?'Over':'Under'} ${l.line} ${esc(l.stat)}, ${fmtOdds(l.odds)}</span></span><span class="got">${r && r.v!=null ? `had ${r.v}` : k==='void' ? 'did not play' : ''}</span></li>`; }).join('')}</ul>
@@ -3826,11 +3827,14 @@ function renderSlipCheck(){
   if (!n) { box.innerHTML = '<div class="meta" style="margin-top:8px">Add picks from Best bets or the Player tab, then check the slip here.</div>'; $('#scNeed').textContent = ''; if (document.activeElement !== inp) inp.value = ''; return; }
   const def = n === 1 ? amToDec(S.slip[0].odds || -110) : slipDec(S.slip);
   const allM = S.slip.every(l => l.m > 1);
-  const mult = userMult() || def;
+  const multBase = userMult() || def, mult = boosted(multBase);
+  if (!n) S.boost = 0;
   inp.readOnly = allM;
-  if (document.activeElement !== inp || allM) inp.value = allM ? Math.round(mult*100)/100 : S.scMult > 1 ? S.scMult : (Math.round(def*100)/100);
-  const need = Math.pow(1/mult, 1/n), needOf = l => allM ? 1/l.m : need;
-  $('#scNeed').innerHTML = allM ? `From your per-pick multipliers. Each pick needs to beat 1 \u00F7 its own multiplier (1.10x needs <b>${pct(1/1.1)}</b>).` : n > 1 ? `So each pick needs to hit <b>${pct(need)}</b> of the time just to break even.` : `This pick needs to hit <b>${pct(need)}</b> of the time to break even.`;
+  if (document.activeElement !== inp || allM) inp.value = allM ? Math.round(multBase*100)/100 : S.scMult > 1 ? S.scMult : (Math.round(def*100)/100);
+  const need = Math.pow(1/mult, 1/n), needOf = l => allM ? Math.pow(1/mult, Math.log(l.m)/Math.log(multBase)) : need;
+  const bi = $('#scBoost'); if (bi && document.activeElement !== bi) bi.value = S.boost > 0 ? S.boost : '';
+  const boostTxt = S.boost > 0 ? `With the ${S.boost}% boost it pays <b>${(Math.round(mult*100)/100).toFixed(2)}x</b>. ` : '';
+  $('#scNeed').innerHTML = boostTxt + (allM ? `From your per-pick multipliers. Each pick needs to beat 1 \u00F7 its own multiplier (1.10x needs <b>${pct(1/1.1)}</b>).` : n > 1 ? `So each pick needs to hit <b>${pct(need)}</b> of the time just to break even.` : `This pick needs to hit <b>${pct(need)}</b> of the time to break even.`);
   const ev = S.slip.map(legEval);
   const legs = S.slip.map((l, i) => { const r = ev[i], p = r ? r.prob : 0, other = l.sport && l.sport !== SPORT, x = other ? null : legX(l, r), v = x ? bbVerdict(x) : (other && l.pv ? {tone: l.pv, st: {n: l.pvn}} : null), nd = needOf(l);
     return {l, r, p, v, nd, other, ok: p >= nd + .03 ? 'g' : p >= nd - .02 ? 'y' : 'r'}; });
@@ -3839,7 +3843,7 @@ function renderSlipCheck(){
   // best single change: drop one leg (n-1 picks at your normal payout, or a straight bet if one is left)
   let fix = null;
   if (n >= 2) legs.forEach((o, i) => {
-    const rest = S.slip.filter((_, j) => j !== i), m2 = allM ? rest.reduce((a, l) => a*l.m, 1) : rest.length === 1 ? amToDec(rest[0].odds || -110) : (S.pay[rest.length] || 0); if (!m2) return;
+    const rest = S.slip.filter((_, j) => j !== i), m2 = boosted(allM ? rest.reduce((a, l) => a*l.m, 1) : rest.length === 1 ? amToDec(rest[0].odds || -110) : (S.pay[rest.length] || 0)); if (!m2) return;
     const c2 = Math.min(.97, legs.filter((_, j) => j !== i).reduce((m, q) => m*q.p, 1) * (rest.length > 1 ? corrInfo(rest).factor : 1)), e2 = c2*m2 - 1;
     if (!fix || e2 > fix.e) fix = {i, e: e2, m: m2, n: rest.length};
   });
@@ -4161,6 +4165,7 @@ $('#scBody').addEventListener('change', e => {
   if (mi) { const l = S.slip[+mi.dataset.scm], v = parseFloat(mi.value); if (l) { if (v > 1) l.m = Math.round(v*100)/100; else delete l.m; saveSlip(); renderParlay(); } return; }
   if (ti) { const l = S.slip[+ti.dataset.sct]; if (l) { l.ltype = ti.value === 'std' ? undefined : ti.value; saveSlip(); renderSlipCheck(); } }
 });
+$('#scBoost').addEventListener('input', e => { const v = parseFloat(e.target.value); S.boost = v > 0 ? Math.min(300, v) : 0; renderParlay(); });
 $('#scMult').addEventListener('input', e => { const v = parseFloat(e.target.value); S.scMult = v > 1 ? v : 0; renderParlay(); });
 $('#zoneMode').addEventListener('click', e => { const b = e.target.closest('[data-zm]'); if (!b) return; S.zm = b.dataset.zm; renderZones(S.byId[S.pid]); });
 if (location.hash === '#alerts') setTimeout(() => setTab('alerts'), 300);
