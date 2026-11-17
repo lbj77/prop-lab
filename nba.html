@@ -2138,7 +2138,7 @@ function renderAnalyzer(){
   const tag = $('#lineTag');
   if (S.lineIsBook && b) { tag.className='tag book'; tag.textContent = `${bookName(S.lineBk || b.book || 'book')} line`; }
   else if (b) { tag.className='tag'; tag.textContent = `book line ${(+b.line).toFixed(1)}`; tag.style.cursor='pointer'; tag.title='Reset to book line'; }
-  else { tag.className='tag'; tag.textContent = 'No book line for this stat'; }
+  else { tag.className='tag'; tag.textContent = 'No book line here: type your app\u2019s line and odds'; }
 
   const r = evalProp(p, S.stat, S.line, S.side, {minMin:S.minMin});
   // strips
@@ -2172,8 +2172,8 @@ function renderAnalyzer(){
     ['Sharp market (Pinnacle or Novig)', (() => { const sh = sharpFor(p, S.stat, S.side); if (!sh) return '—'; const d = r.prob - sh.fair; return sh.line === S.line ? `${pct(sh.fair)} fair at ${sh.line}, model ${d>=0?'+':''}${(d*100).toFixed(0)} pts ${Math.abs(d) > .12 ? '<span class="neg">(big gap: double-check)</span>' : ''}` : `${pct(sh.fair)} fair at ${sh.line} (different line)`; })()]
   ].map(([k,v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('');
   const inSlip = S.slip.find(l => mine(l) && l.pid===p.id && l.stat===S.stat);
-  const noLine = !entries(p, S.stat).length; $('#addBtn').disabled = noLine;
-  $('#addBtn').textContent = noLine ? 'No book line to add' : inSlip ? (inSlip.side===S.side && inSlip.line===S.line ? 'In your parlay' : 'Update leg in parlay') : 'Add to parlay';
+  const noLine = !entries(p, S.stat).length; $('#addBtn').disabled = false;
+  $('#addBtn').textContent = noLine ? (inSlip ? 'Update leg with my line' : `Add with my line: ${S.side === 'over' ? 'Over' : 'Under'} ${S.line} at ${fmtOdds(S.odds)}`) : inSlip ? (inSlip.side===S.side && inSlip.line===S.line ? 'In your parlay' : 'Update leg in parlay') : 'Add to parlay';
 
   // chart filters
   $('#winSeg').innerHTML = WINS.map(w => `<button data-v="${w}" aria-pressed="${w===S.win}">${w?'L'+w:'All'}</button>`).join('');
@@ -2459,7 +2459,7 @@ function renderParlay(){
   if (dupP.length) notes.push(`<div class="note warn">Same player in more than one leg. Those legs are linked, so the combined chance above is less reliable, and many books won’t allow it.</div>`);
   const weak = ev.map((r,i)=>[r?r.prob:0,i]).sort((a,b)=>a[0]-b[0])[0];
   if (S.slip.length>1 && weak[0] < .55) notes.push(`<div class="note bad">Weakest leg: <b>${esc(S.slip[weak[1]].name)} ${S.slip[weak[1]].stat}</b> at ${pct(weak[0])}. Dropping it raises the model chance to ${pct(pModel/Math.max(weak[0],1e-9),1)}.</div>`);
-  if (S.slip.some(l=>!l.book)) notes.push(`<div class="note">Legs marked est. have no book price, so they use −110. Check the real number before you bet.</div>`);
+  if (S.slip.some(l=>!l.book)) notes.push(`<div class="note">Legs you added with your own line use the line and odds you typed. Double-check them against your app before you bet.</div>`);
   $('#parlayNotes').innerHTML = notes.join('');
   const o = chartBase(); o.indexAxis='y'; o.scales.x.max=1; o.scales.x.grid={color:cssv('--line')}; o.scales.x.ticks.callback = v => Math.round(v*100)+'%'; o.scales.y.grid={display:false}; o.scales.y.beginAtZero=undefined;
   o.plugins.tooltip.callbacks = { label: it => `${it.dataset.label}: ${pct(it.raw,1)}` };
