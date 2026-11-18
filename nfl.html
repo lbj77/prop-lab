@@ -1278,7 +1278,7 @@ details.inj{margin-top:22px!important}
           <label>Date<input type="date" id="pbDate"></label>
           <label>Stake ($)<input class="num" type="number" id="pbStake" min="0" step="1" value="10" inputmode="decimal"></label>
           <label>App paid, whole slip (x)<input class="num" type="number" id="pbMult" step="0.01" min="1" placeholder="2.70" inputmode="decimal"></label>
-          <label>Promo / bonus<select class="ghost" id="pbPromo"><option value="">None</option><option value="promo">Promo (Moneyball, etc.)</option><option value="boost">Profit boost</option><option value="discount">Discount</option><option value="free">Free entry</option><option value="flex">Flex / insurance</option></select></label>
+          <label>Promo / bonus<select class="ghost" id="pbPromo"><option value="">None</option><option value="moneyball">Moneyball (+1 pt per made 3)</option><option value="promo">Other promo</option><option value="boost">Profit boost</option><option value="discount">Discount</option><option value="free">Free entry</option><option value="flex">Flex / insurance</option></select></label>
           <label>Promo name or boost %<input type="text" id="pbPromoName" placeholder="Moneyball, or 20 for a 20% boost"></label>
           <label>Result<select class="ghost" id="pbRes"><option value="auto">Grade it from the games</option><option value="won">Hit</option><option value="lost">Missed</option></select></label>
         </div>
@@ -2847,7 +2847,7 @@ async function autoGrade(){
       if (s.sample || !Array.isArray(s.legs)) continue;
       const reAuto = s.graded === 'auto' && s.status !== 'pending';   // automatic grades get re-checked
       const needStatus = s.status === 'pending' || reAuto;
-      const needLegs = !Array.isArray(s.results) || s.results.length !== s.legs.length || s.results.some(r => !r || r.res === 'na');
+      const needLegs = !Array.isArray(s.results) || s.results.length !== s.legs.length || s.results.some(r => !r || r.res === 'na') || (isMoneyball(s) && s.legs.some((l, i) => mbStat(l) && s.results[i] && !s.results[i].man && s.results[i].bonus == null && s.results[i].v != null));
       if (!needStatus && !needLegs) continue;
       const res = s.legs.map((l, li) => {
         const prev = s.results && s.results[li], ls = l.sport || s.sport || SPORT;
@@ -2857,7 +2857,7 @@ async function autoGrade(){
         const day0 = ymd(new Date(s.at)), d0 = l.date && l.date > day0 ? l.date : day0;   // never a game from before the slip was saved
         const g = [...p.games].reverse().find(g => g.d >= d0);
         const firstTeamDay = [...(teamDays[l.team] || [])].filter(d => d >= d0).sort()[0];
-        if (g && (!firstTeamDay || g.d <= firstTeamDay)) { const v = statVal(g, l.stat); return {v, d:g.d, res: v === l.line ? 'void' : (l.side==='over' ? v > l.line : v < l.line) ? 'hit' : 'miss'}; }
+        if (g && (!firstTeamDay || g.d <= firstTeamDay)) { const bonus = mbBonus(s, l, g), v = statVal(g, l.stat) + bonus; return {v, d:g.d, ...(bonus ? {bonus} : {}), res: v === l.line ? 'void' : (l.side==='over' ? v > l.line : v < l.line) ? 'hit' : 'miss'}; }
         if (firstTeamDay) return {d:firstTeamDay, res:'void'};   // team played, he didn't: books void the leg
         return {res:'na'};
       });
@@ -2874,7 +2874,7 @@ async function autoGrade(){
           const live = s.legs.filter((l,i) => res[i].res === 'hit');
           if (status === 'won' && live.length < s.legs.length) upd.dec = live.reduce((m,l) => m*amToDec(l.odds), 1); }
       }
-      const normR = arr => JSON.stringify((arr || []).map(r => r ? [r.res || '', r.v ?? null, r.d ?? null] : null));
+      const normR = arr => JSON.stringify((arr || []).map(r => r ? [r.res || '', r.v ?? null, r.d ?? null, r.bonus ?? null] : null));
       if (normR(s.results) === normR(res) && !upd.status) continue;
       if (upd.status === 'pending') toast('Fixed a parlay that was graded too early: it\u2019s waiting for the games again');   // same results (stored key order can differ)
       Object.assign(s, upd); if (upd.status) n++;
@@ -3245,6 +3245,10 @@ function renderLab(){
     <td class="r ${x.prof>=0?'pos':'neg'}"><b>${x.prof>=0?'+':''}${money(x.prof)}</b></td><td class="r ${x.roi>=0?'pos':'neg'}">${x.n ? `${x.roi>=0?'+':''}${(x.roi*100).toFixed(1)}%` : '\u2014'}</td><td class="r">${(c => c && c.n >= 10 ? `<b class="${c.beat/c.n >= .5 ? 'pos' : 'neg'}">${pct(c.beat/c.n)}</b><div class="meta" style="font-size:11px">${c.n} picks</div>` : '\u2014')(CL[x.st.id])}</td><td>${gradeChips(x.g, x.st.id)}</td><td>${x.st.id === 'all' ? '' : `<button class="add ${S.strat===x.st.id?'on':''}" data-usestrat="${x.st.id}">${S.strat===x.st.id?'In use':'Use'}</button>`}</td></tr>`).join('')}</tbody>`;
 }
 
+/* ---------- Moneyball (Chalkboard): every made 3 adds 1 point to points props ---------- */
+const isMoneyball = s => !!s && (s.promo === 'moneyball' || /money\s*ball/i.test(s.promoName || ''));
+const mbStat = (l) => (l.sport || 'nba') === 'nba' && SPORT === 'nba' && STATS[l.stat] && (STATS[l.stat].f || []).includes('pts');
+const mbBonus = (s, l, g) => isMoneyball(s) && mbStat(l) && STATS['3PM'] ? statVal(g, '3PM') : 0;
 /* ---------- which game a pick is for (found from the player's schedule), and fixing a pick's result by hand ---------- */
 function legGame(name, date){
   const p = S.players.find(x => normName(x.name) === normName(name)); if (!p) return null;
@@ -3260,9 +3264,10 @@ function pbHints(){
     if (l.sport !== SPORT) { el.textContent = `Game is found when the ${l.sport.toUpperCase()} page loads.`; return; }
     const G = legGame(l.name, date);
     if (!G) { el.textContent = 'Player not found yet. Pick a name from the list.'; return; }
-    if (G.played) { const g = G.played, v = STATS[l.stat] ? statVal(g, l.stat) : null, ln = parseFloat(l.line);
+    const mbOn = $('#pbPromo').value === 'moneyball' || /money\s*ball/i.test($('#pbPromoName').value), bon = mbOn && mbStat(l) && G.played ? statVal(G.played, '3PM') : 0;
+    if (G.played) { const g = G.played, v = STATS[l.stat] ? statVal(g, l.stat) + bon : null, ln = parseFloat(l.line);
       const res = v == null || !isFinite(ln) ? '' : v === ln ? ' <b>Push</b>' : (l.side === 'over' ? v > ln : v < ln) ? ' <b class="hit">Hit</b>' : ' <b class="miss">Miss</b>';
-      el.innerHTML = `Game: ${esc(fmtDate(g.d))} ${g.h ? 'vs' : '@'} ${esc(g.opp)}${v != null ? `, had <b>${v}</b> ${esc(l.stat)}${res}` : ''}`; return; }
+      el.innerHTML = `Game: ${esc(fmtDate(g.d))} ${g.h ? 'vs' : '@'} ${esc(g.opp)}${v != null ? `, had <b>${v}</b> ${esc(l.stat)}${bon ? ` (${v - bon} + ${bon} Moneyball)` : ''}${res}` : ''}`; return; }
     if (G.next) { el.innerHTML = `Game: <b>${esc(gameWhen(G.next))}</b> ${G.next.home ? 'vs' : '@'} ${esc(G.next.opp)}. Graded after it ends.`; return; }
     el.textContent = `No game for ${G.p.name} on or after this date yet.`; });
 }
@@ -3286,7 +3291,7 @@ async function saveLegResult(id, i, res, v){
 /* ---------- Bets tab: period filter, analytics and Chalkboard-style cards ---------- */
 const BPER = [['7','7 days'],['30','30 days'],['all','All time']], BFIL = [['all','All'],['pending','Waiting'],['won','Hits'],['lost','Misses']];
 S.betPer = lsGet(LSP+'betPer') || 'all'; S.betF = lsGet(LSP+'betF') || 'all';
-const PROMO_NM = {promo:'Promo', boost:'Profit boost', discount:'Discount', free:'Free entry', flex:'Flex'};
+const PROMO_NM = {moneyball:'Moneyball', promo:'Promo', boost:'Profit boost', discount:'Discount', free:'Free entry', flex:'Flex'};
 const slipSport = s => { const ss = [...new Set(s.legs.map(l => l.sport || 'nba'))]; return ss.length === 1 ? ss[0].toUpperCase() : 'Mixed'; };
 const slipProfit = s => s.status === 'won' ? s.stake*(s.dec - 1) : s.status === 'lost' ? -s.stake : 0;
 function inPer(s){ if (S.betPer === 'all') return true; return Date.now() - new Date(s.at).getTime() <= (+S.betPer)*864e5; }
@@ -3347,7 +3352,7 @@ function betLeg(l, i, s){
   const when = pp && pp.next && pp.next.date === l.date ? `${gameWhen(pp.next)} ${pp.next.home ? 'vs' : '@'} ${pp.next.opp}` : '';
   const meta = [l.team, (l.sport || '').toUpperCase(), when || (l.date ? fmtDate(l.date) : ''), l.m ? l.m + 'x' : '', l.ltype ? ltypeOf(l.ltype)[1] : ''].filter(Boolean).map(esc).join(' • ');
   return `<div class="bl ${k}"><div class="bl-row"><div class="av">${esc(initials(l.name))}<span class="bd" aria-label="${k === 'hit' ? 'hit' : k === 'miss' ? 'missed' : k === 'void' ? 'void' : 'not graded yet'}">${k === 'hit' ? '✓' : k === 'miss' ? '✗' : k === 'void' ? '–' : ''}</span></div>
-    <div style="min-width:0"><div class="bl-name">${esc(l.name)}${r && r.man ? '<span class="bl-man">set by you</span>' : ''}</div><div class="bl-meta">${meta}</div></div>
+    <div style="min-width:0"><div class="bl-name">${esc(l.name)}${r && r.bonus ? `<span class="bl-man">${v - r.bonus} + ${r.bonus} Moneyball</span>` : ''}${r && r.man ? '<span class="bl-man">set by you</span>' : ''}</div><div class="bl-meta">${meta}</div></div>
     <div class="bl-line"><span class="${l.side === 'over' ? 'up' : 'dn'}">${l.side === 'over' ? '↑' : '↓'}</span> ${l.line}<small>${esc(sw)}</small></div></div>
     ${k === 'void' ? '<div class="bl-meta" style="margin:6px 0 0 50px">Did not play</div>' : `<div class="bl-bar"><div class="fill" style="width:${(fill*100).toFixed(1)}%"></div>${v != null ? `<span class="val" style="left:${Math.max(4, fill*100).toFixed(1)}%">${v}</span>` : ''}</div>`}
     ${(legCat(l, s) || {}).none ? '' : catHtml(l, s)}
@@ -3374,6 +3379,7 @@ function betCard(s){
     <div class="slip-edit" data-form="${s.id}" hidden>
       <label>Stake ($)<input class="num" type="number" inputmode="decimal" min="0" step="1" value="${s.stake}" data-in-stake></label>
       <label>Parlay payout<input class="num" type="text" autocomplete="off" value="${esc(fmtOdds(decToAm(s.dec)))}" data-in-odds></label>
+      ${(s.legs || []).some(l => (l.sport || 'nba') === 'nba') ? `<label style="flex-direction:row;align-items:center;gap:6px"><input type="checkbox" data-in-mb ${isMoneyball(s) ? 'checked' : ''}> Moneyball (+1 pt per made 3)</label>` : ''}
       <button class="btn" data-save="${s.id}" style="width:auto">Save</button><button class="ghost" data-cancel="${s.id}">Cancel</button>
       <div class="meta" style="flex-basis:100%">Enter what your app showed for the whole parlay. ${oddsHint}</div>
     </div></div>`;
@@ -3415,7 +3421,7 @@ async function savePastBet(){
         +l.m > 1 ? {m: +l.m} : {}, l.ltype ? {ltype: l.ltype} : {}); })};
   if (res !== 'auto') slip.graded = 'manual';
   if (boost) slip.boost = boost;
-  if (promo) { slip.promo = promo; if (pname && !boost) slip.promoName = pname; }
+  if (promo) { slip.promo = promo; if (pname && !boost) slip.promoName = pname; else if (promo === 'moneyball') slip.promoName = 'Moneyball'; }
   let saved = false;
   if (cloud) { try { await cloud.slipsCol.doc(slip.id).set(slip); saved = true; } catch(e){} }
   if (!saved) { S.slips.unshift(slip); lsSet(LSP+'slips', S.slips); }
@@ -4704,7 +4710,7 @@ $('#simUnique').addEventListener('change', e => { lsSet(LSP+'simUnique', e.targe
 $('#resView').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; resView = b.dataset.v; renderResultsTable(); });
 $('#pastBet').addEventListener('toggle', e => { if (e.target.id === 'pastBet' && e.target.open) renderPastBet(); });
 $('#pbLegs').addEventListener('input', e => { const row = e.target.closest('.pb-leg'), k = e.target.dataset.k; if (!row || !k || !PB) return; PB[+row.dataset.i][k] = e.target.value; pbHints(); });
-$('#pbDate').addEventListener('change', pbHints);
+$('#pbDate').addEventListener('change', pbHints); $('#pbPromo').addEventListener('change', pbHints); $('#pbPromoName').addEventListener('input', pbHints);
 $('#pbLegs').addEventListener('change', e => { const row = e.target.closest('.pb-leg'), k = e.target.dataset.k; if (!row || !k || !PB) return; const l = PB[+row.dataset.i]; l[k] = e.target.value; if (k === 'sport') { l.stat = SPORT_STATS[l.sport][0]; renderPastBet(); } else pbHints(); });
 $('#pbLegs').addEventListener('click', e => { const d = e.target.closest('[data-pbdel]'); if (!d || !PB) return; PB.splice(+d.dataset.pbdel, 1); if (!PB.length) PB.push(pbBlank()); renderPastBet(); });
 $('#pbAddLeg').addEventListener('click', () => { if (!PB) renderPastBet(); const last = PB[PB.length - 1]; PB.push(Object.assign(pbBlank(), {sport: last ? last.sport : SPORT, stat: last ? last.stat : SPORT_STATS[SPORT][0]})); renderPastBet(); });
@@ -4727,7 +4733,10 @@ $('#slipList').addEventListener('click', e => {
     const f = $(`[data-form="${sv.dataset.save}"]`), stake = +f.querySelector('[data-in-stake]').value, dec = parseOdds(f.querySelector('[data-in-odds]').value);
     if (!(stake >= 0)) { toast('Enter a stake of $0 or more'); return; }
     if (!(dec > 1)) { toast('Payout not recognized. ' + oddsHint); return; }
-    updateSlip(sv.dataset.save, {stake, dec}).then(() => toast(`Saved: $${stake} to pay ${money(stake*dec)}`)); return;
+    const mbx = f.querySelector('[data-in-mb]'), cur = S.slips.find(x => x.id === sv.dataset.save), upd = {stake, dec};
+    if (mbx && cur && mbx.checked !== isMoneyball(cur)) { Object.assign(upd, mbx.checked ? {promo: 'moneyball', promoName: 'Moneyball'} : {promo: null, promoName: null});
+      upd.results = (cur.results || []).map((r, i) => r && !r.man && mbStat(cur.legs[i]) ? {res: 'na'} : r); if (cur.graded === 'auto' || cur.status === 'pending') { upd.status = 'pending'; upd.graded = null; } }
+    updateSlip(sv.dataset.save, upd).then(() => { toast(`Saved: $${stake} to pay ${money(stake*dec)}`); if (upd.results) setTimeout(autoGrade, 200); }); return;
   }
 });
 $('#slipList').addEventListener('click', e => { const s = e.target.closest('[data-st]'); if (s) return setSlipStatus(s.dataset.id, s.dataset.st); const d = e.target.closest('[data-del]'); if (d) deleteSlip(d.dataset.del); });
