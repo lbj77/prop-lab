@@ -2757,14 +2757,15 @@ async function autoGrade(){
     S.slips = S.slips.map(x => Object.isFrozen(x) || Object.isFrozen(x.legs || []) ? JSON.parse(JSON.stringify(x)) : x);
     for (const s of S.slips) {
       if (s.sample || !Array.isArray(s.legs)) continue;
-      const needStatus = s.status === 'pending';
+      const reAuto = s.graded === 'auto' && s.status !== 'pending';   // automatic grades get re-checked
+      const needStatus = s.status === 'pending' || reAuto;
       const needLegs = !Array.isArray(s.results) || s.results.length !== s.legs.length || s.results.some(r => !r || r.res === 'na');
       if (!needStatus && !needLegs) continue;
       const res = s.legs.map((l, li) => {
         const prev = s.results && s.results[li], ls = l.sport || s.sport || SPORT;
         if (ls !== SPORT) return prev || {res:'na'};
         const p = byName[normName(l.name)]; if (!p || !STATS[l.stat]) return prev && prev.res !== 'na' ? prev : {res:'na'};
-        const d0 = l.date || ymd(new Date(s.at));
+        const day0 = ymd(new Date(s.at)), d0 = l.date && l.date > day0 ? l.date : day0;   // never a game from before the slip was saved
         const g = [...p.games].reverse().find(g => g.d >= d0);
         const firstTeamDay = [...(teamDays[l.team] || [])].filter(d => d >= d0).sort()[0];
         if (g && (!firstTeamDay || g.d <= firstTeamDay)) { const v = statVal(g, l.stat); return {v, d:g.d, res: v === l.line ? 'void' : (l.side==='over' ? v > l.line : v < l.line) ? 'hit' : 'miss'}; }
@@ -2772,18 +2773,21 @@ async function autoGrade(){
         return {res:'na'};
       });
       const known = res.filter(r => r.res !== 'na');
-      if (!known.length) continue;
+      if (!known.length && !reAuto) continue;
       const upd = {results: res};
       if (needStatus) {
         let status = null;
         if (res.some(r => r.res === 'miss')) status = 'lost';
         else if (res.every(r => r.res !== 'na')) status = res.some(r => r.res === 'hit') ? 'won' : 'void';
-        if (status) { upd.status = status; upd.graded = 'auto';
+        if (!status && reAuto) { upd.status = 'pending'; upd.graded = null; }   // a wrong automatic grade goes back to waiting
+        else if (status && status === s.status) {}
+        else if (status) { upd.status = status; upd.graded = 'auto';
           const live = s.legs.filter((l,i) => res[i].res === 'hit');
           if (status === 'won' && live.length < s.legs.length) upd.dec = live.reduce((m,l) => m*amToDec(l.odds), 1); }
       }
       const normR = arr => JSON.stringify((arr || []).map(r => r ? [r.res || '', r.v ?? null, r.d ?? null] : null));
-      if (normR(s.results) === normR(res) && !upd.status) continue;   // same results (stored key order can differ)
+      if (normR(s.results) === normR(res) && !upd.status) continue;
+      if (upd.status === 'pending') toast('Fixed a parlay that was graded too early: it\u2019s waiting for the games again');   // same results (stored key order can differ)
       Object.assign(s, upd); if (upd.status) n++;
       if (cloud) { try { await cloud.slipsCol.doc(s.id).update(upd); continue; } catch(e){ failed++; } }
       else lsSet(LSP+'slips', S.slips);
