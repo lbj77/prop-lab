@@ -684,6 +684,14 @@ main{padding-bottom:90px}
 .ban td.r{text-align:right;white-space:nowrap}
 .ban .hb{display:inline-block;height:6px;border-radius:999px;background:var(--over);vertical-align:middle;margin-right:6px}
 .ban-key{margin-top:12px;padding:12px;border-radius:12px;background:var(--ball-soft);font-size:14px;line-height:1.45}
+.pb-hint{grid-column:1/-1;font-size:12.5px;color:var(--muted);padding:0 2px}
+.pb-hint b.hit{color:var(--over)} .pb-hint b.miss{color:var(--under)}
+.bl-ed{border:0;background:none;color:var(--muted);font-size:12px;font-weight:700;padding:2px 0;margin-left:50px;text-decoration:underline;cursor:pointer}
+.bl-form{margin:8px 0 2px 50px;padding:10px;border-radius:10px;background:var(--panel2);display:flex;flex-wrap:wrap;gap:8px;align-items:center;font-size:13px}
+.bl-form input{width:80px;font-weight:800;text-align:center}
+.bl-form button{width:auto;padding:6px 12px}
+.bl-form .r-hit{background:var(--over);color:#002417;border-color:var(--over)} .bl-form .r-miss{background:var(--under);color:#2a0006;border-color:var(--under)}
+.bl-man{font-size:11px;color:var(--ball);margin-left:6px;font-weight:700}
 .sc-fix{margin-top:10px;padding:12px;border-radius:12px;background:var(--over-soft);font-size:16px;line-height:1.45}
 
 .an-chart{margin:14px 0 6px;padding-top:14px;border-top:1px solid var(--line)}
@@ -2843,6 +2851,7 @@ async function autoGrade(){
       if (!needStatus && !needLegs) continue;
       const res = s.legs.map((l, li) => {
         const prev = s.results && s.results[li], ls = l.sport || s.sport || SPORT;
+        if (prev && prev.man) return prev;   // you fixed this one by hand
         if (ls !== SPORT) return prev || {res:'na'};
         const p = byName[normName(l.name)]; if (!p || !STATS[l.stat]) return prev && prev.res !== 'na' ? prev : {res:'na'};
         const day0 = ymd(new Date(s.at)), d0 = l.date && l.date > day0 ? l.date : day0;   // never a game from before the slip was saved
@@ -3236,6 +3245,44 @@ function renderLab(){
     <td class="r ${x.prof>=0?'pos':'neg'}"><b>${x.prof>=0?'+':''}${money(x.prof)}</b></td><td class="r ${x.roi>=0?'pos':'neg'}">${x.n ? `${x.roi>=0?'+':''}${(x.roi*100).toFixed(1)}%` : '\u2014'}</td><td class="r">${(c => c && c.n >= 10 ? `<b class="${c.beat/c.n >= .5 ? 'pos' : 'neg'}">${pct(c.beat/c.n)}</b><div class="meta" style="font-size:11px">${c.n} picks</div>` : '\u2014')(CL[x.st.id])}</td><td>${gradeChips(x.g, x.st.id)}</td><td>${x.st.id === 'all' ? '' : `<button class="add ${S.strat===x.st.id?'on':''}" data-usestrat="${x.st.id}">${S.strat===x.st.id?'In use':'Use'}</button>`}</td></tr>`).join('')}</tbody>`;
 }
 
+/* ---------- which game a pick is for (found from the player's schedule), and fixing a pick's result by hand ---------- */
+function legGame(name, date){
+  const p = S.players.find(x => normName(x.name) === normName(name)); if (!p) return null;
+  const g = [...p.games].sort((a, b) => a.d < b.d ? -1 : 1).find(g => g.d >= date);
+  if (g) return {p, played: g, date: g.d};
+  if (p.next && p.next.date && p.next.date >= date) return {p, next: p.next, date: p.next.date};
+  return {p};
+}
+function pbHints(){
+  if (!PB) return; const date = ($('#pbDate') && $('#pbDate').value) || ymd(new Date());
+  PB.forEach((l, i) => { const el = $(`[data-hint="${i}"]`); if (!el) return;
+    if (!l.name.trim()) { el.innerHTML = ''; return; }
+    if (l.sport !== SPORT) { el.textContent = `Game is found when the ${l.sport.toUpperCase()} page loads.`; return; }
+    const G = legGame(l.name, date);
+    if (!G) { el.textContent = 'Player not found yet. Pick a name from the list.'; return; }
+    if (G.played) { const g = G.played, v = STATS[l.stat] ? statVal(g, l.stat) : null, ln = parseFloat(l.line);
+      const res = v == null || !isFinite(ln) ? '' : v === ln ? ' <b>Push</b>' : (l.side === 'over' ? v > ln : v < ln) ? ' <b class="hit">Hit</b>' : ' <b class="miss">Miss</b>';
+      el.innerHTML = `Game: ${esc(fmtDate(g.d))} ${g.h ? 'vs' : '@'} ${esc(g.opp)}${v != null ? `, had <b>${v}</b> ${esc(l.stat)}${res}` : ''}`; return; }
+    if (G.next) { el.innerHTML = `Game: <b>${esc(gameWhen(G.next))}</b> ${G.next.home ? 'vs' : '@'} ${esc(G.next.opp)}. Graded after it ends.`; return; }
+    el.textContent = `No game for ${G.p.name} on or after this date yet.`; });
+}
+function legStatus(results, n){
+  const r = Array.from({length: n}, (_, i) => results[i] || {res: 'na'});
+  if (r.some(x => x.res === 'miss')) return 'lost';
+  if (r.every(x => x.res !== 'na')) return r.some(x => x.res === 'hit') ? 'won' : 'void';
+  return 'pending';
+}
+async function saveLegResult(id, i, res, v){
+  const s = S.slips.find(x => x.id === id); if (!s) return; const l = s.legs[i];
+  const results = Array.from({length: s.legs.length}, (_, k) => (s.results && s.results[k]) || {res: 'na'}).map(x => JSON.parse(JSON.stringify(x)));
+  if (res === 'auto') results[i] = {res: 'na'};
+  else { if (res === 'num') res = v === l.line ? 'void' : (l.side === 'over' ? v > l.line : v < l.line) ? 'hit' : 'miss';
+    results[i] = Object.assign({res, man: true}, isFinite(v) ? {v} : {}, l.date ? {d: l.date} : {}); }
+  const status = legStatus(results, s.legs.length);
+  await updateSlip(id, {results, status, graded: status === 'pending' ? null : 'auto'});
+  toast(res === 'auto' ? 'The app will grade this pick from the games' : `Saved: ${l.name} ${res === 'hit' ? 'hit' : res === 'miss' ? 'missed' : 'void'}`);
+  if (res === 'auto') setTimeout(autoGrade, 200);
+}
 /* ---------- Bets tab: period filter, analytics and Chalkboard-style cards ---------- */
 const BPER = [['7','7 days'],['30','30 days'],['all','All time']], BFIL = [['all','All'],['pending','Waiting'],['won','Hits'],['lost','Misses']];
 S.betPer = lsGet(LSP+'betPer') || 'all'; S.betF = lsGet(LSP+'betF') || 'all';
@@ -3296,12 +3343,21 @@ function betLeg(l, i, s){
   const r = s.results && s.results[i], k = r ? r.res : 'pend', v = r && r.v != null ? +r.v : null;
   const sw = (l.sport || SPORT) === SPORT ? statWord(l.stat) : l.stat;
   const fill = v == null ? 0 : l.line > 0 ? Math.min(1, v/l.line) : v > 0 ? 1 : 0;
-  const meta = [l.team, (l.sport || '').toUpperCase(), l.date ? fmtDate(l.date) : '', l.m ? l.m + 'x' : '', l.ltype ? ltypeOf(l.ltype)[1] : ''].filter(Boolean).map(esc).join(' • ');
+  const pp = k === 'pend' && (l.sport || SPORT) === SPORT ? S.players.find(x => normName(x.name) === normName(l.name)) : null;
+  const when = pp && pp.next && pp.next.date === l.date ? `${gameWhen(pp.next)} ${pp.next.home ? 'vs' : '@'} ${pp.next.opp}` : '';
+  const meta = [l.team, (l.sport || '').toUpperCase(), when || (l.date ? fmtDate(l.date) : ''), l.m ? l.m + 'x' : '', l.ltype ? ltypeOf(l.ltype)[1] : ''].filter(Boolean).map(esc).join(' • ');
   return `<div class="bl ${k}"><div class="bl-row"><div class="av">${esc(initials(l.name))}<span class="bd" aria-label="${k === 'hit' ? 'hit' : k === 'miss' ? 'missed' : k === 'void' ? 'void' : 'not graded yet'}">${k === 'hit' ? '✓' : k === 'miss' ? '✗' : k === 'void' ? '–' : ''}</span></div>
-    <div style="min-width:0"><div class="bl-name">${esc(l.name)}</div><div class="bl-meta">${meta}</div></div>
+    <div style="min-width:0"><div class="bl-name">${esc(l.name)}${r && r.man ? '<span class="bl-man">set by you</span>' : ''}</div><div class="bl-meta">${meta}</div></div>
     <div class="bl-line"><span class="${l.side === 'over' ? 'up' : 'dn'}">${l.side === 'over' ? '↑' : '↓'}</span> ${l.line}<small>${esc(sw)}</small></div></div>
     ${k === 'void' ? '<div class="bl-meta" style="margin:6px 0 0 50px">Did not play</div>' : `<div class="bl-bar"><div class="fill" style="width:${(fill*100).toFixed(1)}%"></div>${v != null ? `<span class="val" style="left:${Math.max(4, fill*100).toFixed(1)}%">${v}</span>` : ''}</div>`}
-    ${(legCat(l, s) || {}).none ? '' : catHtml(l, s)}</div>`;
+    ${(legCat(l, s) || {}).none ? '' : catHtml(l, s)}
+    <button class="bl-ed" data-legedit="${s.id}|${i}">Fix result</button>
+    <div class="bl-form" data-legform="${s.id}|${i}" hidden>
+      <label>He had <input class="num" type="number" step="0.5" min="0" inputmode="decimal" value="${v ?? ''}" data-legv> ${esc(sw)}</label>
+      <button class="btn" data-legres="num">Save number</button>
+      <button class="ghost ${k === 'hit' ? 'r-hit' : ''}" data-legres="hit">Hit</button><button class="ghost ${k === 'miss' ? 'r-miss' : ''}" data-legres="miss">Miss</button><button class="ghost" data-legres="void">Void</button>
+      ${r && r.man ? '<button class="ghost" data-legres="auto">Let the app grade it</button>' : ''}
+    </div></div>`;
 }
 function betCard(s){
   const pay = s.stake*s.dec, won = s.status === 'won', lost = s.status === 'lost';
@@ -3339,7 +3395,8 @@ function renderPastBet(){
     <input class="num" data-k="line" type="number" step="0.5" min="0" placeholder="Line" value="${esc(l.line)}" inputmode="decimal" aria-label="Line">
     <input class="num" data-k="m" type="number" step="0.01" min="1" placeholder="1.10x" value="${esc(l.m)}" inputmode="decimal" aria-label="This pick's multiplier">
     <select class="ghost" data-k="ltype" aria-label="Line type">${LTYPES.map(t => `<option value="${t[0] === 'std' ? '' : t[0]}" ${(l.ltype || '') === (t[0] === 'std' ? '' : t[0]) ? 'selected' : ''}>${esc(t[1])}</option>`).join('')}</select>
-    <button class="ghost" data-pbdel="${i}" aria-label="Remove pick">✕</button></div>`).join('');
+    <button class="ghost" data-pbdel="${i}" aria-label="Remove pick">✕</button><div class="pb-hint" data-hint="${i}"></div></div>`).join('');
+  pbHints();
 }
 async function savePastBet(){
   const legs = PB.filter(l => l.name.trim() && l.line !== '' && isFinite(+l.line));
@@ -3353,7 +3410,8 @@ async function savePastBet(){
   const slip = {id: 's' + Date.now().toString(36), at: new Date(date + 'T12:00:00').toISOString(), added: 'manual', stake, dec: Math.round(dec*1000)/1000, pModel: null,
     status: res === 'auto' ? 'pending' : res,
     legs: legs.map(l => { const pl = l.sport === SPORT ? S.players.find(p => normName(p.name) === normName(l.name)) : null;
-      return Object.assign({name: pl ? pl.name : l.name.trim(), team: pl ? pl.team : '', stat: l.stat, side: l.side, line: +l.line, odds: -110, sport: l.sport, date},
+      const G = pl ? legGame(pl.name, date) : null;
+      return Object.assign({name: pl ? pl.name : l.name.trim(), team: pl ? pl.team : '', stat: l.stat, side: l.side, line: +l.line, odds: -110, sport: l.sport, date: (G && G.date) || date},
         +l.m > 1 ? {m: +l.m} : {}, l.ltype ? {ltype: l.ltype} : {}); })};
   if (res !== 'auto') slip.graded = 'manual';
   if (boost) slip.boost = boost;
@@ -4645,13 +4703,20 @@ $('#simStake').addEventListener('change', e => { const v = Math.max(1, +e.target
 $('#simUnique').addEventListener('change', e => { lsSet(LSP+'simUnique', e.target.checked); renderResultsTable(); });
 $('#resView').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; resView = b.dataset.v; renderResultsTable(); });
 $('#pastBet').addEventListener('toggle', e => { if (e.target.id === 'pastBet' && e.target.open) renderPastBet(); });
-$('#pbLegs').addEventListener('input', e => { const row = e.target.closest('.pb-leg'), k = e.target.dataset.k; if (!row || !k || !PB) return; PB[+row.dataset.i][k] = e.target.value; });
-$('#pbLegs').addEventListener('change', e => { const row = e.target.closest('.pb-leg'), k = e.target.dataset.k; if (!row || !k || !PB) return; const l = PB[+row.dataset.i]; l[k] = e.target.value; if (k === 'sport') { l.stat = SPORT_STATS[l.sport][0]; renderPastBet(); } });
+$('#pbLegs').addEventListener('input', e => { const row = e.target.closest('.pb-leg'), k = e.target.dataset.k; if (!row || !k || !PB) return; PB[+row.dataset.i][k] = e.target.value; pbHints(); });
+$('#pbDate').addEventListener('change', pbHints);
+$('#pbLegs').addEventListener('change', e => { const row = e.target.closest('.pb-leg'), k = e.target.dataset.k; if (!row || !k || !PB) return; const l = PB[+row.dataset.i]; l[k] = e.target.value; if (k === 'sport') { l.stat = SPORT_STATS[l.sport][0]; renderPastBet(); } else pbHints(); });
 $('#pbLegs').addEventListener('click', e => { const d = e.target.closest('[data-pbdel]'); if (!d || !PB) return; PB.splice(+d.dataset.pbdel, 1); if (!PB.length) PB.push(pbBlank()); renderPastBet(); });
 $('#pbAddLeg').addEventListener('click', () => { if (!PB) renderPastBet(); const last = PB[PB.length - 1]; PB.push(Object.assign(pbBlank(), {sport: last ? last.sport : SPORT, stat: last ? last.stat : SPORT_STATS[SPORT][0]})); renderPastBet(); });
 $('#pbSave').addEventListener('click', savePastBet);
 $('#myCats').addEventListener('click', e => { const b = e.target.closest('[data-mystrat]'); if (!b) return; S.strat = b.dataset.mystrat; lsSet(LSP+'strat', S.strat); pushSync(); renderStratSel(); toast(`Best bets now use \u201C${catName(S.strat)}\u201D`); setTab('today'); });
 $('#myCats').addEventListener('toggle', e => { S.myCatsOpen = e.target.open; }, true);
+$('#slipList').addEventListener('click', e => {
+  const ed = e.target.closest('[data-legedit]'); if (ed) { const f = $(`[data-legform="${ed.dataset.legedit}"]`); if (f) { f.hidden = !f.hidden; if (!f.hidden) f.querySelector('[data-legv]').focus(); } return; }
+  const b = e.target.closest('[data-legres]'); if (!b) return; const f = b.closest('[data-legform]'), [id, i] = f.dataset.legform.split('|'), v = parseFloat(f.querySelector('[data-legv]').value);
+  if (b.dataset.legres === 'num' && !isFinite(v)) { toast('Type what he had, like 24'); return; }
+  saveLegResult(id, +i, b.dataset.legres, v);
+});
 $('#slipList').addEventListener('click', e => { const m = e.target.closest('[data-more]'); if (!m) return; const a = $(`[data-acts="${m.dataset.more}"]`); if (a) { a.hidden = !a.hidden; m.setAttribute('aria-expanded', !a.hidden); } });
 $('#view-bets').addEventListener('click', e => { const pb = e.target.closest('[data-bper]'), fb = e.target.closest('[data-bfil]'); if (pb) { S.betPer = pb.dataset.bper; lsSet(LSP+'betPer', S.betPer); renderTracker(); } if (fb) { S.betF = fb.dataset.bfil; lsSet(LSP+'betF', S.betF); renderTracker(); } });
 $('#slipList').addEventListener('click', e => {
