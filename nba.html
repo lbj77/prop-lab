@@ -4388,6 +4388,28 @@ function gameFor(team, date){ return GAMES.find(g => g.game_date === date && (te
 const SIG = {'AGREE':['Both models','agree'], 'FF only':['Four Factors only','one'], 'APP only':['Scoring model only','one'], 'SPLIT':['Models disagree','split'], 'NO PLAY':['No play','none']};
 function playTxt(v, g){ if (!v || v === 'NO PLAY') return '\u2014'; if (v === 'OVER' || v === 'UNDER') return v === 'OVER' ? 'Over' : 'Under'; return teamAbbr(v); }
 function resBadge(r){ return r === 'W' ? '<span class="gres w">W</span>' : r === 'L' ? '<span class="gres l">L</span>' : r === 'P' ? '<span class="gres p">P</span>' : ''; }
+/* ---------- game plays: let each signal's own record decide BET / LEAN / PASS ---------- */
+// Pulled toward 50% by 100 phantom bets, so a hot or cold streak on a small sample can't swing it much.
+const GLV_MIN = 30;
+function sigRecords(){
+  const o = {};
+  const add = (k, r) => { const x = o[k] || (o[k] = {W:0, L:0}); if (r === 'W' || r === 'L') x[r]++; };
+  GAMES.forEach(g => {
+    if (g.spread_signal === 'AGREE' || g.spread_signal === 'FF only') add('spread|' + g.spread_signal, g.spread_result);
+    if (g.spread_signal === 'APP only') add('spread|APP only', g.app_spread_result);
+    if (g.total_signal === 'AGREE' || g.total_signal === 'FF only') add('total|' + g.total_signal, g.total_result);
+    if (g.total_signal === 'APP only') add('total|APP only', g.app_total_result);
+  });
+  return o;
+}
+function sigLevel(recs, mkt, sigv){
+  const dflt = sigv === 'AGREE' ? 'bet' : (sigv === 'FF only' || sigv === 'APP only') ? 'lean' : 'pass';
+  if (dflt === 'pass') return {lv: 'pass'};
+  const r = recs[mkt + '|' + sigv] || {W:0, L:0}, n = r.W + r.L;
+  if (n < GLV_MIN) return {lv: dflt, r, n};
+  const sh = .5 + (r.W/n - .5)*n/(n + 100);
+  return {lv: sh >= .53 ? 'bet' : sh >= .5 ? 'lean' : 'pass', r, n, sh, moved: true};
+}
 /* ---------- Game AI: learns which game-model plays actually win ---------- */
 const GAI_MIN = 60;
 const GAI_FEAT = {
@@ -4463,21 +4485,23 @@ function renderGames(){
   // one plain-English play per market
   const nickOf = name => { const n = String(name || '').trim(); const m = n.match(/(Trail Blazers|76ers|[A-Za-z]+)$/); return m ? m[1] : n; };
   const fmtLine = v => v == null ? '' : v === 0 ? 'PK' : (v > 0 ? '+' : '') + v;
+  const SREC = sigRecords();
+  const recTxt = (L) => L && L.n >= GLV_MIN ? ` (this has gone ${L.r.W}\u2013${L.r.L}${L.lv === 'pass' ? ', so it\u2019s held back' : ''})` : '';
   function plays(g){
     const vs = gnum(g.vegas_spread_home), vt = gnum(g.vegas_total), out = [], bets = gameBets(g);
     const level = sigv => sigv === 'AGREE' ? 'bet' : (sigv === 'FF only' || sigv === 'APP only') ? 'lean' : 'pass';
     const who = sigv => sigv === 'AGREE' ? 'Both models agree' : sigv === 'FF only' ? 'Only the Four Factors model' : sigv === 'APP only' ? 'Only the Scoring model' : sigv === 'SPLIT' ? 'The two models disagree' : 'Neither model sees an edge';
     const ai = (mkt, play) => { const x = bets.find(b => b.mkt === mkt && b.play === play); const c = x ? gaiChance(x) : null; return c == null ? null : c; };
     // spread
-    { const lv = level(g.spread_signal), team = g.spread_signal === 'APP only' ? g.app_spread_play : g.spread_play;
+    { const SL = sigLevel(SREC, 'spread', g.spread_signal), lv = SL.lv, team = g.spread_signal === 'APP only' ? g.app_spread_play : g.spread_play;
       if (lv !== 'pass' && team && team !== 'NO PLAY' && vs != null) { const home = team === g.home_team, line = home ? vs : -vs;
-        out.push({mkt: 'Spread', lv, text: `${nickOf(team)} ${fmtLine(line)}`, why: who(g.spread_signal), res: g.spread_signal === 'APP only' ? g.app_spread_result : g.spread_result, ai: ai('spread', team)}); }
-      else out.push({mkt: 'Spread', lv: 'pass', text: 'No spread bet', why: who(g.spread_signal)}); }
+        out.push({mkt: 'Spread', lv, text: `${nickOf(team)} ${fmtLine(line)}`, why: who(g.spread_signal) + recTxt(SL), res: g.spread_signal === 'APP only' ? g.app_spread_result : g.spread_result, ai: ai('spread', team)}); }
+      else out.push({mkt: 'Spread', lv: 'pass', text: 'No spread bet', why: who(g.spread_signal) + recTxt(SL)}); }
     // total
-    { const lv = level(g.total_signal), pick = g.total_signal === 'APP only' ? g.app_total_play : g.total_play;
+    { const TL = sigLevel(SREC, 'total', g.total_signal), lv = TL.lv, pick = g.total_signal === 'APP only' ? g.app_total_play : g.total_play;
       if (lv !== 'pass' && (pick === 'OVER' || pick === 'UNDER') && vt != null)
-        out.push({mkt: 'Total', lv, text: `${pick === 'OVER' ? 'Over' : 'Under'} ${vt}`, why: who(g.total_signal), res: g.total_signal === 'APP only' ? g.app_total_result : g.total_result, ai: ai('total', pick)});
-      else out.push({mkt: 'Total', lv: 'pass', text: 'No total bet', why: who(g.total_signal)}); }
+        out.push({mkt: 'Total', lv, text: `${pick === 'OVER' ? 'Over' : 'Under'} ${vt}`, why: who(g.total_signal) + recTxt(TL), res: g.total_signal === 'APP only' ? g.app_total_result : g.total_result, ai: ai('total', pick)});
+      else out.push({mkt: 'Total', lv: 'pass', text: 'No total bet', why: who(g.total_signal) + recTxt(TL)}); }
     return out;
   }
   const resTxt = r => r === 'W' ? '<span class="won">WON</span>' : r === 'L' ? '<span class="lost">LOST</span>' : r === 'P' ? '<span class="push">PUSH</span>' : '';
@@ -4518,7 +4542,7 @@ function renderGames(){
     ['Scoring model', tally(g => g.app_spread_play && g.app_spread_play !== 'NO PLAY' ? g.app_spread_result : null), tally(g => g.app_total_play && g.app_total_play !== 'NO PLAY' ? g.app_total_result : null)],
     ['Only one model', tally(g => g.spread_signal === 'FF only' ? g.spread_result : g.spread_signal === 'APP only' ? g.app_spread_result : null), tally(g => g.total_signal === 'FF only' ? g.total_result : g.total_signal === 'APP only' ? g.app_total_result : null)]
   ];
-  $('#gameRecord').innerHTML = `<div class="grec"><div class="pc-h">Game model record (all graded games)</div><table class="res"><thead><tr><th></th><th>Spread</th><th>Total</th></tr></thead><tbody>${rows.map(r => `<tr><td><b>${r[0]}</b></td><td>${rec(r[1])}</td><td>${rec(r[2])}</td></tr>`).join('')}</tbody></table><div class="meta" style="font-size:12px;margin-top:6px">52.4% is break-even at -110. Treat records under about 300 bets as early.</div></div>`;
+  $('#gameRecord').innerHTML = `<div class="grec"><div class="pc-h">Game model record (all graded games)</div><table class="res"><thead><tr><th></th><th>Spread</th><th>Total</th></tr></thead><tbody>${rows.map(r => `<tr><td><b>${r[0]}</b></td><td>${rec(r[1])}</td><td>${rec(r[2])}</td></tr>`).join('')}</tbody></table><div class="meta" style="font-size:12px;margin-top:6px">52.4% is break-even at -110. Treat records under about 300 bets as early.</div>${(() => { const nm = {AGREE:'Both agree', 'FF only':'Four Factors only', 'APP only':'Scoring only'}; const out = []; ['spread','total'].forEach(m => ['AGREE','FF only','APP only'].forEach(sg => { const L = sigLevel(SREC, m, sg); out.push(`<tr><td>${m === 'spread' ? 'Spread' : 'Total'}: ${nm[sg]}</td><td>${L.n ? `${L.r.W}\u2013${L.r.L}` : '\u2014'}</td><td><b class="pl ${L.lv}">${L.lv.toUpperCase()}</b>${L.n < GLV_MIN ? ' <span class="meta">(default, too few)</span>' : ''}</td></tr>`); })); return `<div class="pc-h" style="margin-top:12px">How plays are labeled now</div><table class="res"><tbody>${out.join('')}</tbody></table><div class="meta" style="font-size:12px;margin-top:6px">Each signal earns its label from its own record, pulled toward 50% so a short streak can\u2019t swing it. BET needs about 53%+ after that pull, PASS means it\u2019s been losing. Re-checked every time games are graded.</div>`; })()}</div>`;
 }
 function renderH2H(){
   h2hRows = [];
