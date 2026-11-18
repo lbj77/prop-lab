@@ -1292,7 +1292,7 @@ const SPORT = 'nfl';
 const NBA = SPORT === 'nba';
 const LSP = NBA ? 'proplab:' : SPORT === 'nfl' ? 'nfllab:' : SPORT + 'lab:';
 const NHL_CFG = {
-  league:'NHL', script:'nhl_props_export.py', file:'nhl_props_data.json',
+  league:'NHL', script:'nhl_props_export.py', file:'nhl_props_data.json', avgTotal:6.2,
   stats: {
     'Points':{f:['gl','a'],n:'Points'}, 'Goals':{f:['gl'],n:'Goals (anytime)'}, 'Assists':{f:['a'],n:'Assists'}, 'SOG':{f:['sog'],n:'Shots on goal'},
     'Blocks':{f:['blk'],n:'Blocked shots'}, 'PPP':{f:['ppp'],n:'Power-play points'}, 'Hits':{f:['hit'],n:'Hits'}, 'Saves':{f:['sv'],n:'Goalie saves'}
@@ -1323,7 +1323,7 @@ const NHL_CFG = {
     ] }
 };
 const MLB_CFG = {
-  league:'MLB', script:'mlb_props_export.py', file:'mlb_props_data.json',
+  league:'MLB', script:'mlb_props_export.py', file:'mlb_props_data.json', avgTotal:8.6,
   stats: {
     'Hits':{f:['hh'],n:'Hits'}, 'TB':{f:['tb'],n:'Total bases'}, 'HR':{f:['hr'],n:'Home runs'}, 'RBI':{f:['rbi'],n:'RBIs'}, 'Runs':{f:['rs'],n:'Runs scored'},
     'H+R+RBI':{f:['hh','rs','rbi'],n:'Hits + runs + RBIs'}, 'Batter K':{f:['bk'],n:'Strikeouts (batter)'}, 'BB':{f:['bb'],n:'Walks'}, 'SB':{f:['sb'],n:'Stolen bases'},
@@ -1354,7 +1354,7 @@ const MLB_CFG = {
     ] }
 };
 const CFG = SPORT === 'nhl' ? NHL_CFG : SPORT === 'mlb' ? MLB_CFG : NBA ? {
-  league:'NBA', script:'nba_props_export.py', file:'props_data.json',
+  league:'NBA', script:'nba_props_export.py', file:'props_data.json', poisson:['3PM','STL','BLK','S+B','TOV'], avgTotal:228,
   stats: {
     PTS:{f:['pts'],n:'Points'}, REB:{f:['reb'],n:'Rebounds'}, AST:{f:['ast'],n:'Assists'}, '3PM':{f:['fg3m'],n:'Threes made'},
     PRA:{f:['pts','reb','ast'],n:'Pts + Reb + Ast'}, PR:{f:['pts','reb'],n:'Pts + Reb'}, PA:{f:['pts','ast'],n:'Pts + Ast'}, RA:{f:['reb','ast'],n:'Reb + Ast'},
@@ -1364,7 +1364,7 @@ const CFG = SPORT === 'nhl' ? NHL_CFG : SPORT === 'mlb' ? MLB_CFG : NBA ? {
   main:['PTS','REB','AST','3PM','PRA','PR','PA','RA'], top5:['PTS','REB','AST','3PM','PRA'],
   dstats:['PTS','REB','AST','3PM','PRA','STL','BLK','TOV'], logCols:['PTS','REB','AST','3PM'], finder:['PTS','REB','AST','3PM','PRA']
 } : {
-  league:'NFL', script:'nfl_props_export.py', file:'nfl_props_data.json', yesno:['TD'],
+  league:'NFL', script:'nfl_props_export.py', file:'nfl_props_data.json', yesno:['TD'], avgTotal:44,
   stats: {
     'Pass Yds':{f:['pyd'],n:'Passing yards'}, 'Pass TD':{f:['ptd'],n:'Passing TDs'}, 'Comp':{f:['cmp'],n:'Completions'}, 'Pass Att':{f:['att'],n:'Pass attempts'},
     'INT':{f:['int'],n:'Interceptions'}, 'Rush Yds':{f:['ryd'],n:'Rushing yards'}, 'Rush Att':{f:['car'],n:'Rush attempts'},
@@ -1378,6 +1378,14 @@ const STATS = CFG.stats;
 const YESNO = CFG.yesno || [], POIS = CFG.poisson || [];
 const SHOWMIN = NBA || SPORT === 'nhl';
 // chance of at least k events when the average is lam (hockey shots, baseball hits: small counts)
+const SHARP_W = .65;   // how much the sharp market counts vs our own model (it's the better guess)
+const clip3 = v => Math.max(-3, Math.min(3, v));
+// move a sharp over-chance from the sharp book's line to another line, using this stat's shape
+function fairShift(fo, shLine, line, stat, s){
+  if (+line === +shLine) return fo;
+  if (POIS.includes(stat)) { const k0 = Math.floor(shLine) + 1; let lo = .005, hi = 80; for (let i = 0; i < 40; i++) { const mid = (lo + hi)/2; if (poisAtLeast(mid, k0) < fo) lo = mid; else hi = mid; } return poisAtLeast((lo + hi)/2, Math.floor(line) + 1); }
+  const mu = shLine - s*invNorm(1 - fo); return 1 - ncdf((line - mu)/s);
+}
 function poisAtLeast(lam, k){ if (k <= 0) return 1; let term = Math.exp(-lam), cdf = term; for (let i = 1; i < k; i++) { term *= lam / i; cdf += term; } return Math.max(0, Math.min(1, 1 - cdf)); }
 const statVal = (g, k) => STATS[k].f.reduce((s,f)=>s+(+g[f]||0),0);
 const WINS = [5,10,15,20,30,0];
@@ -1947,7 +1955,19 @@ function evalProp(p, stat, line, side, opts={}){
   [[a5,w.l5],[a10,w.l10],[a30,w.l30],[vsVals.length>=2?aOpp:NaN,w.opp]].forEach(([a,wt]) => { if (isFinite(a) && wt>0) { num += a*wt; den += wt; } });
   const dfac = defFactor(opp, stat, p);
   const oa = outAdjust(p, stat);
-  const proj = Math.max(0, (den ? num/den : a10) * (1 + (dfac-1)*((w.def ?? 50)/100)) + (oa ? oa.adj : 0));
+  let base = den ? num/den : a10, projMin = null, minRatio = null;
+  if (SHOWMIN && !opts.noMin) {   // minutes first: his scoring rate per minute x the minutes he's likely to play tonight
+    const mins = gs.map(g => +g.min || 0), rt = n => { const m = mins.slice(0, n).reduce((a,b) => a+b, 0); return m > 0 ? vals.slice(0, n).reduce((a,b) => a+b, 0)/m : NaN; };
+    let rn = 0, rd = 0; [[rt(5), w.l5], [rt(10), w.l10], [rt(30), w.l30]].forEach(([v, wt]) => { if (isFinite(v) && wt > 0) { rn += v*wt; rd += wt; } });
+    const m5 = mean(mins.slice(0,5)), m10 = mean(mins.slice(0,10)), m30 = mean(mins.slice(0,30));
+    if (rd && isFinite(m5) && m5 > 0) {
+      projMin = .6*m5 + .4*(isFinite(m10) ? m10 : m5);
+      if (nextRestOf(p) === 1) projMin *= .97;   // second night of a back-to-back
+      minRatio = isFinite(m30) && m30 > 0 ? projMin/m30 : null;
+      base = .7*(rn/rd)*projMin + .3*base;
+    }
+  }
+  const proj = Math.max(0, base * (1 + (dfac-1)*((w.def ?? 50)/100)) + (oa ? oa.adj : 0));
   let s = sd(vals.slice(0,30)); if (!isFinite(s)) s = Math.max(1, proj*.3); s = Math.max(s, 0.8);
   const pOver = POIS.includes(stat) ? poisAtLeast(Math.max(proj, .01), Math.floor(line) + 1) : 1 - ncdf((line - proj)/s);
   const probRaw = side==='over' ? pOver : 1 - pOver;
@@ -1959,7 +1979,14 @@ function evalProp(p, stat, line, side, opts={}){
     AWAY: hitInfo(gs.filter(g=>!g.h).map(g=>statVal(g,stat)), line, side),
     B2B: hitInfo(gs.filter(g=>g.rest===1).map(g=>statVal(g,stat)), line, side),
     dfac, nextRest: nextRestOf(p), oa, WO: oa && oa.woGames.length ? hitInfo(oa.woGames.map(g=>statVal(g,stat)), line, side) : null};
+  r.projMin = projMin; r.minRatio = minRatio; r.total = p.next && p.next.total;
+  const sh = (opts.noSharp || S.sharpOn === false) ? null : sharpFor(p, stat, 'over');
+  if (sh && isFinite(sh.fair)) { const fo = fairShift(sh.fair, sh.line, line, stat, s); r.sharp = side === 'over' ? fo : 1 - fo; r.sharpLine = sh.line; }
   if (learnActive()) r.prob = learnProb(r, side);   // the learning model, trained on graded results
+  if (r.sharp != null) {   // lean on the sharp market (Pinnacle/Novig, house cut removed): our model only nudges it
+    const wS = SHARP_W*(Math.abs(line - sh.line) <= 2*s ? 1 : .5);
+    r.modelProb = r.prob; r.prob = Math.max(.02, Math.min(.98, wS*r.sharp + (1 - wS)*r.prob));
+  }
   // composite score: model chance + recent hit rates (+ matchup when it exists)
   const parts = [[r.prob,.4],[r.L10.pct,.3],[r.L30.pct,.2],[r.VS.n>=2?r.VS.pct:NaN,.1]];
   let sn=0, sw=0; parts.forEach(([v,wt]) => { if (isFinite(v)) { sn+=v*wt; sw+=wt; } });
@@ -2925,7 +2952,7 @@ function labRows(){
       const odds = prices.reduce((a,b) => amToDec(b) > amToDec(a) ? b : a);
       const r = evalProp(p, k, L.line, side), x = {p, k, line:L.line, side, odds, r, edge: r.prob - implied(odds), score: r.score, book:true};
       const flags = LAB.filter(st => !st.t || st.t(x)).map(st => st.id).join(',');
-      (byDate[p.next.date] = byDate[p.next.date] || []).push([p.name, p.team, k, side[0], L.line, odds, flags, r.probRaw.toFixed(3), gradeX(x), (isFinite(r.dfac) ? (side === 'over' ? r.dfac - 1 : 1 - r.dfac) : 0).toFixed(3)].join('|'));
+      (byDate[p.next.date] = byDate[p.next.date] || []).push([p.name, p.team, k, side[0], L.line, odds, flags, r.probRaw.toFixed(3), gradeX(x), (isFinite(r.dfac) ? (side === 'over' ? r.dfac - 1 : 1 - r.dfac) : 0).toFixed(3), r.sharp != null ? r.sharp.toFixed(3) : '', r.minRatio != null ? r.minRatio.toFixed(3) : '', r.nextRest ?? '', (p.next && p.next.total) || ''].join('|'));
     }
   }
   return byDate;
@@ -2937,11 +2964,13 @@ async function labLoad(){
   if (labShared()) { try { const snap = await sharedDb.collection(LAB_PUBLIC).get(); labDocs = snap.docs.map(d => JSON.parse(JSON.stringify(d.data()))).filter(Boolean); return; } catch(e){} }
   // owner: merge your own copy with the shared copy (imports and other devices may only be in one of them)
   const merged = {};
-  const add = list => (list || []).forEach(d => { if (!d || !d.date) return; const cur = merged[d.date], done = x => (x.res || '').replace(/\./g, '').length;
+  const clvBy = {};
+  const add = list => (list || []).forEach(d => { if (!d || !d.date) return; if (d.clv) clvBy[d.date] = Object.assign({}, clvBy[d.date] || {}, d.clv); const cur = merged[d.date], done = x => (x.res || '').replace(/\./g, '').length;
     if (!cur || done(d) > done(cur) || (done(d) === done(cur) && (d.rows || []).length > (cur.rows || []).length)) merged[d.date] = d; });
   if (cloud && cloud.labCol) { try { const snap = await cloud.labCol.get(); add(snap.docs.map(d => JSON.parse(JSON.stringify(d.data())))); } catch(e){} }
   if (sharedDb) { try { const snap = await sharedDb.collection(LAB_PUBLIC).get(); add(snap.docs.map(d => JSON.parse(JSON.stringify(d.data())))); } catch(e){} }
   add(lsGet(LSP+'lab'));
+  Object.keys(clvBy).forEach(dt => { if (merged[dt]) merged[dt] = Object.assign({}, merged[dt], {clv: clvBy[dt]}); });   // closing lines saved by your PC
   labDocs = Object.values(merged).sort((a,b) => a.date < b.date ? -1 : 1);
 }
 async function labPublish(doc){
@@ -3009,7 +3038,7 @@ async function labSync(){
     const gen = S.data.generated || S.importedAt || '';
     for (const [date, rows] of Object.entries(labRows())) {
       const cur = labDocs.find(d => d.date === date);
-      if (rows.length && (!cur || (cur.gen !== gen && !(cur.res || '').replace(/\./g, '')))) await labSave({date, gen, rows, res: '.'.repeat(rows.length)});
+      if (rows.length && (!cur || (cur.gen !== gen && !(cur.res || '').replace(/\./g, '')))) await labSave(Object.assign({date, gen, rows, res: '.'.repeat(rows.length)}, cur && cur.clv ? {clv: cur.clv} : {}));
     }
     // 2) grade any day the box scores now cover
     const latest = latestGame(), byName = {}; S.players.forEach(p => byName[normName(p.name)] = p);
@@ -3107,7 +3136,8 @@ function renderLab(){
     flags.forEach(id => { const o = stats[id]; if (!o) return; if (r === 'h') { o.w++; o.prof += 10*(amToDec(odds)-1); } else { o.l++; o.prof -= 10; } if (o.g[gr]) r === 'h' ? o.g[gr].w++ : o.g[gr].l++; });
   }));
   const all = labDocs.length ? labDocs.map(d => d.date).sort() : [];
-  $('#labInfo').textContent = all.length ? `${labShared() ? 'Shared results from the page owner. ' : ''}Tracking since ${fmtDate(all[0])}. ${days.length} day${days.length===1?'':'s'} in view, ${graded} graded leans.` : '';
+  const CL = clvSummary(days, LAB.map(st => st.id)), ca = CL.all;
+  $('#labInfo').innerHTML = all.length ? `${labShared() ? 'Shared results from the page owner. ' : ''}Tracking since ${fmtDate(all[0])}. ${days.length} day${days.length===1?'':'s'} in view, ${graded} graded leans.${ca.n >= 10 ? ` <b>Closing line:</b> ${pct(ca.beat/ca.n)} of ${ca.n} picks beat the sharp closing price (avg ${(ca.sum/ca.n*100 >= 0 ? '+' : '')}${(ca.sum/ca.n*100).toFixed(1)} pts). Over 50% means the picks are sharp.` : ''}` : '';
   renderCombos(days);
   renderStratMatches();
   renderCalibration();
@@ -3115,13 +3145,31 @@ function renderLab(){
   const rows = LAB.map(st => { const o = stats[st.id], n = o.w + o.l; return {st, n, w:o.w, l:o.l, wp: n ? o.w/n : 0, prof:o.prof, roi: n ? o.prof/(10*n) : 0, g:o.g}; })
     .sort((a,b) => ((b.n >= 20) - (a.n >= 20)) || b.wp - a.wp);
   const best = rows.find(x => x.n >= 30 && x.st.id !== 'all');
-  $('#labTbl').innerHTML = `<thead><tr><th>Strategy</th><th class="r">Picks</th><th class="r">W\u2013L</th><th>Win rate</th><th class="r">Profit ($10 each)</th><th class="r">Return</th><th>By grade</th><th></th></tr></thead><tbody>${rows.map(x => `<tr class="${x.st.id==='all'?'base':''}">
+  $('#labTbl').innerHTML = `<thead><tr><th>Strategy</th><th class="r">Picks</th><th class="r">W\u2013L</th><th>Win rate</th><th class="r">Profit ($10 each)</th><th class="r">Return</th><th class="r" title="How often the sharp market moved toward the pick before the game">Beat close</th><th>By grade</th><th></th></tr></thead><tbody>${rows.map(x => `<tr class="${x.st.id==='all'?'base':''}">
     <td><b>${esc(x.st.n)}</b>${best && best.st.id === x.st.id ? ' <span class="tag book">best so far</span>' : ''}<div class="meta" style="font-size:12px">${esc(x.st.d)}</div></td>
     <td class="r">${x.n}${x.n && x.n < 30 ? '<div class="meta" style="font-size:11px">small sample</div>' : ''}</td><td class="r">${x.w}\u2013${x.l}</td>
     <td><div class="wbar"><i style="width:${(x.wp*100).toFixed(0)}%"></i><span>${x.n ? pct(x.wp) : '\u2014'}</span></div></td>
-    <td class="r ${x.prof>=0?'pos':'neg'}"><b>${x.prof>=0?'+':''}${money(x.prof)}</b></td><td class="r ${x.roi>=0?'pos':'neg'}">${x.n ? `${x.roi>=0?'+':''}${(x.roi*100).toFixed(1)}%` : '\u2014'}</td><td>${gradeChips(x.g, x.st.id)}</td><td>${x.st.id === 'all' ? '' : `<button class="add ${S.strat===x.st.id?'on':''}" data-usestrat="${x.st.id}">${S.strat===x.st.id?'In use':'Use'}</button>`}</td></tr>`).join('')}</tbody>`;
+    <td class="r ${x.prof>=0?'pos':'neg'}"><b>${x.prof>=0?'+':''}${money(x.prof)}</b></td><td class="r ${x.roi>=0?'pos':'neg'}">${x.n ? `${x.roi>=0?'+':''}${(x.roi*100).toFixed(1)}%` : '\u2014'}</td><td class="r">${(c => c && c.n >= 10 ? `<b class="${c.beat/c.n >= .5 ? 'pos' : 'neg'}">${pct(c.beat/c.n)}</b><div class="meta" style="font-size:11px">${c.n} picks</div>` : '\u2014')(CL[x.st.id])}</td><td>${gradeChips(x.g, x.st.id)}</td><td>${x.st.id === 'all' ? '' : `<button class="add ${S.strat===x.st.id?'on':''}" data-usestrat="${x.st.id}">${S.strat===x.st.id?'In use':'Use'}</button>`}</td></tr>`).join('')}</tbody>`;
 }
 
+/* ---------- closing line value: did the sharp market move toward our pick before the game? ---------- */
+let CLVSD = {};
+function rowClv(doc, i){
+  const rec = doc.clv && doc.clv[(() => { const f = doc.rows[i].split('|'); return `${f[0]}|${f[2]}|${f[3]}|${f[4]}`; })()];
+  if (!rec || !rec.c) return null;
+  const f = doc.rows[i].split('|'), stat = f[2], line = +f[4], over = f[3] === 'o', odds = +f[5];
+  const k = f[0] + '|' + stat; let s = CLVSD[k];
+  if (s == null) { const pl = S.players.find(q => normName(q.name) === normName(f[0])); const v = pl && STATS[stat] ? pl.games.slice(0, 30).map(g => statVal(g, stat)) : []; s = CLVSD[k] = Math.max(.8, sd(v) || Math.max(1, line*.3)); }
+  const at = c => { const fo = fairShift(c[0], c[1], line, stat, s); return over ? fo : 1 - fo; };
+  const close = at(rec.c), open = rec.o ? at(rec.o) : close, price = isFinite(odds) && odds ? implied(odds) : .524;
+  return {close, open, beat: close > price, clv: close - price, move: close - open};
+}
+function clvSummary(days, ids){
+  const out = {}; (ids || ['all']).forEach(id => out[id] = {n:0, beat:0, sum:0, mv:0});
+  days.forEach(doc => { if (!doc.clv) return; doc.rows.forEach((row, i) => { const c = rowClv(doc, i); if (!c) return; const fl = row.split('|')[6].split(',');
+    Object.keys(out).forEach(id => { if (id !== 'all' && !fl.includes(id)) return; const o = out[id]; o.n++; o.beat += c.beat ? 1 : 0; o.sum += c.clv; o.mv += c.move; }); }); });
+  return out;
+}
 /* ---------- Model report card + automatic correction ---------- */
 const CAL_MIN = 150;
 let CAL = {lambda: null, n: 0, bins: [], avgP: 0, hit: 0};
@@ -3138,8 +3186,8 @@ function probAt(p, k, line, side, date){
 }
 /* ---------- Learning model: re-weights the signals by what actually hit ---------- */
 const LEARN_MIN = 500;
-const LFEAT = ['Model chance','Perfect last 5','Hit 8+ of last 10','70%+ of last 15','70%+ of last 30','65%+ full log','Head to head history','Soft defense matchup','Teammate out','Over (vs under)','Defense edge (per 10%)'];
-let LEARN = null, LPTS = [];
+const LFEAT = ['Model chance','Perfect last 5','Hit 8+ of last 10','70%+ of last 15','70%+ of last 30','65%+ full log','Head to head history','Soft defense matchup','Teammate out','Over (vs under)','Defense edge (per 10%)','Sharp market agrees (per 10%)','Minutes trending his way (per 10%)','Back-to-back working for this side','High game total working for this side'];
+let LEARN = null, LPTS = [], LTEST = null;
 const lgt = p => { const q = Math.max(.02, Math.min(.98, p)); return Math.log(q/(1-q)); };
 const sig = z => 1/(1+Math.exp(-z));
 function featVec(r, side){
@@ -3148,12 +3196,20 @@ function featVec(r, side){
     n(r.L5) >= 5 && r.L5.pct === 1 ? 1 : 0, n(r.L10) >= 8 && r.L10.pct >= .8 ? 1 : 0, n(r.L15) >= 12 && r.L15.pct >= .7 ? 1 : 0,
     n(r.L30) >= 15 && r.L30.pct >= .7 ? 1 : 0, n(r.ALL) >= 20 && r.ALL.pct >= .65 ? 1 : 0, n(r.VS) >= 2 && r.VS.pct >= .67 ? 1 : 0,
     isFinite(r.dfac) && (side === 'over' ? r.dfac >= 1.06 : r.dfac <= .94) ? 1 : 0, r.oa && (side === 'over' ? r.oa.adj >= 1 : r.oa.adj <= -1) ? 1 : 0, side === 'over' ? 1 : 0,
-    isFinite(r.dfac) ? Math.max(-3, Math.min(3, (side === 'over' ? r.dfac - 1 : 1 - r.dfac)*10)) : 0];
+    isFinite(r.dfac) ? Math.max(-3, Math.min(3, (side === 'over' ? r.dfac - 1 : 1 - r.dfac)*10)) : 0,
+    ...newFeats(r.sharp, r.probRaw, r.minRatio, r.nextRest, r.total, side === 'over')];
+}
+function newFeats(sharp, prob, minRatio, rest, total, over){
+  const sg = over ? 1 : -1;
+  return [sharp != null && isFinite(sharp) ? clip3((sharp - prob)*10) : 0, minRatio != null && isFinite(minRatio) && minRatio > 0 ? clip3((minRatio - 1)*10)*sg : 0,
+    rest === 1 ? -sg : 0, total && isFinite(total) && CFG.avgTotal ? clip3((total - CFG.avgTotal)/(CFG.avgTotal*.05))*sg : 0];
 }
 function featFromRow(row, prob){
   const f = row.split('|'), fl = new Set(f[6].split(','));
   const adv = f[9] != null && isFinite(+f[9]) ? +f[9] : (fl.has('def') ? .08 : 0);   // older days: estimate from the soft-defense flag
-  return [1, lgt(prob), ...['l5','l10','l15','l30','szn','h2h','def','boost'].map(k => fl.has(k) ? 1 : 0), f[3] === 'o' ? 1 : 0, Math.max(-3, Math.min(3, adv*10))];
+  const num = i => f[i] !== undefined && f[i] !== '' && isFinite(+f[i]) ? +f[i] : null;
+  return [1, lgt(prob), ...['l5','l10','l15','l30','szn','h2h','def','boost'].map(k => fl.has(k) ? 1 : 0), f[3] === 'o' ? 1 : 0, Math.max(-3, Math.min(3, adv*10)),
+    ...newFeats(num(10), prob, num(11), num(12), num(13), f[3] === 'o')];
 }
 function trainLearn(pts){
   const d = pts[0][0].length, w = new Array(d).fill(0); w[1] = 1;   // start by trusting the model as is
@@ -3183,7 +3239,16 @@ function computeCalibration(){
   let num = 0, den = 0; pts.forEach(([pr,y]) => { num += (pr - .5)*(y - .5); den += (pr - .5)*(pr - .5); });
   const lambda = den > 0 ? Math.max(.25, Math.min(1.15, num/den)) : null;
   const prevLearn = LEARN ? LEARN.w.join(',') : '';
-  LEARN = LPTS.length >= LEARN_MIN ? {w: trainLearn(LPTS), n: LPTS.length, avg: 0} : null;
+  LTEST = null;
+  if (LPTS.length >= LEARN_MIN) {
+    const cut = Math.floor(LPTS.length*.8), tr = LPTS.slice(0, cut), te = LPTS.slice(cut), wT = trainLearn(tr);
+    const pz = x => { let z = 0; x.forEach((v, i) => z += v*wT[i]); return sig(z); };
+    const ll = f => -mean(te.map(([x, y]) => { const q = Math.max(.02, Math.min(.98, f(x))); return y ? Math.log(q) : Math.log(1 - q); }));
+    const hitIn = (f, lo) => { const sel = te.filter(([x]) => f(x) >= lo); return {n: sel.length, hit: sel.length ? mean(sel.map(t => t[1])) : NaN}; };
+    LTEST = {n: te.length, llBase: ll(x => sig(x[1])), llLearn: ll(pz), topBase: hitIn(x => sig(x[1]), .6), topLearn: hitIn(pz, .6)};
+    LTEST.better = LTEST.llLearn < LTEST.llBase - .001;
+  }
+  LEARN = LPTS.length >= LEARN_MIN && LTEST && LTEST.better ? {w: trainLearn(LPTS), n: LPTS.length, avg: 0} : null;
   if (LEARN) { let sP = 0; LPTS.forEach(([x]) => { let z = 0; x.forEach((v,i) => z += v*LEARN.w[i]); sP += sig(z); }); LEARN.avg = sP/LPTS.length; }
   if (LEARN && LEARN.w.map(v => v.toFixed(2)).join(',') !== prevLearn.split(',').map(v => (+v).toFixed(2)).join(',')) setTimeout(renderAll, 0);
   const prev = CAL.lambda;
@@ -3212,12 +3277,16 @@ function renderCalibration(){
     ? `<div class="meta">Automatic correction turns on after ${CAL_MIN} graded leans (${n} so far). Until then the model runs uncorrected.</div>`
     : `<div class="calrow"><div><b>Automatic correction: ${on ? 'ON' : 'OFF'}</b><div class="meta">${CAL.lambda < .98 ? `The model runs hot, so its chances are pulled toward 50%: 70% becomes ${ex(.7)}%, 80% becomes ${ex(.8)}%.` : CAL.lambda > 1.02 ? `The model runs cautious, so its chances are pushed out: 70% becomes ${ex(.7)}%.` : 'The model is close to honest, so the change is tiny.'} This updates every chance, edge, Hit score and pick in Prop Lab.</div></div>
        <button class="btn ${on ? 'sec' : ''}" data-calib="1" style="width:auto">${on ? 'Turn off' : 'Turn on'}</button></div>`;
+  const shOn = S.sharpOn !== false;
+  $('#calFix').innerHTML += `<div class="calrow" style="margin-top:10px"><div><b>Lean on the sharp market: ${shOn ? 'ON' : 'OFF'}</b><div class="meta">When Pinnacle or Novig has the prop, their fair price (house cut removed) counts for about two-thirds of the chance and our model nudges it. Recommended: sharp books are the best guess there is.</div></div><button class="btn ${shOn ? 'sec' : ''}" data-sharp="1" style="width:auto">${shOn ? 'Turn off' : 'Turn on'}</button></div>`;
   const L = LEARN, lon = S.learnOn !== false;
-  if (!L) { $('#calFix').innerHTML += `<div class="meta" style="margin-top:10px">The learning model starts after ${LEARN_MIN} graded leans (${n} so far).</div>`; return; }
+  const T = LTEST, testLine = T ? `<div class="meta" style="margin-top:6px">Honest test: trained on older picks, then scored on your newest <b>${T.n}</b> picks it never saw. ${T.better ? 'It beat the plain model' : 'It did <b>not</b> beat the plain model, so it stays off for now'}${T.topLearn.n >= 20 ? `. Its 60%+ picks hit <b>${pct(T.topLearn.hit)}</b> (${T.topLearn.n})${T.topBase.n >= 20 ? ` vs <b>${pct(T.topBase.hit)}</b> for the plain model (${T.topBase.n})` : ''}` : ''}.</div>` : '';
+  if (!L) { $('#calFix').innerHTML += `<div class="meta" style="margin-top:10px">${T ? '' : `The learning model starts after ${LEARN_MIN} graded leans (${n} so far).`}</div>${testLine}`; return; }
   const base = .55, eff = i => (sig(lgt(base) + L.w[i]) - base)*100;
   const wrows = LFEAT.slice(1).map((nm, j) => ({nm, v: eff(j + 2)})).sort((a,b) => b.v - a.v);
   $('#calFix').innerHTML += `<div class="calrow" style="margin-top:10px"><div><b>Learning model: ${lon ? 'ON' : 'OFF'}</b><div class="meta">Re-weights every signal by what actually hit across ${L.n} graded leans, and replaces the correction above while it’s on. It retrains each time a day is graded. Model chance now counts about ${Math.round(Math.max(0, L.w[1])*100)}% as much as before. Its average prediction is ${pct(L.avg)} vs ${pct(CAL.hit)} actually hit.</div></div>
      <button class="btn ${lon ? 'sec' : ''}" data-learn="1" style="width:auto">${lon ? 'Turn off' : 'Turn on'}</button></div>
+     ${testLine}
      <div class="pc-h" style="margin-top:12px">What each signal is worth now</div>
      <div class="meta" style="margin-bottom:6px">Change in hit chance when the signal is present, starting from a 55% prop.</div>
      <div class="lweights">${wrows.map(x => `<div class="lw"><span>${esc(x.nm)}</span><b class="${x.v >= 1 ? 'pos' : x.v <= -1 ? 'neg' : ''}">${x.v>=0?'+':''}${x.v.toFixed(1)} pts</b></div>`).join('')}</div>`;
@@ -3959,6 +4028,7 @@ function bbCard(x, v, i, top){
       <div><span>Grade</span><b>${gradeX(x)}</b></div>
     </div>
     ${x.r.L10.seq ? `<div class="tk" aria-label="Last 10, newest first">${x.r.L10.seq.slice(0,10).map(s => `<i class="${s}"></i>`).join('')}</div>` : ''}
+    ${x.r.sharp != null ? `<div class="bb-strat">Sharp books (Pinnacle/Novig) say <b style="color:var(--ink)">${pct(x.r.sharp)}</b>${x.r.modelProb != null ? `, our model alone said ${pct(x.r.modelProb)}` : ''}. ${x.r.projMin ? `Expected minutes: ${x.r.projMin.toFixed(0)}.` : ''}</div>` : x.r.projMin ? `<div class="bb-strat">Expected minutes: ${x.r.projMin.toFixed(0)}.</div>` : ''}
     <div class="bb-strat">Strategy: <b style="color:var(--ink)">${esc(v.st.n)}</b>. ${v.rec.n ? `${v.rec.w} won, ${v.rec.l} lost, ${v.rec.roi >= 0 ? '+' : ''}${Math.round(v.rec.roi*100)}% return.` : 'No results yet.'}${also.length ? ` Also fits: ${also.map(s => esc(s.n)).join(', ')}.` : ''}</div>
     ${v.note ? `<div class="bb-note">${esc(v.note)}</div>` : ''}
     <div class="bb-btns"><button class="btn" data-bbadd="${i}">${on ? '✓ In your parlay' : '+ Add to parlay'}</button><button class="btn sec" data-bbopen="${i}">See player</button></div>
@@ -3979,11 +4049,12 @@ function renderBest(){
   else if (!labDocs.length) sub = 'Loading past results…';
   else if (user) sub = `Using your strategy: <b>${esc(user.n)}</b>.${rr(user)} Change it in Results.`;
   else sub = bs ? `Every pick fits a strategy that has made money. The best one: <b>${esc(bs.n)}</b>.${rr(bs)}` : 'No strategy has enough winning picks yet, so these are all small bets.';
+  sub += list.length ? ' Bet the same amount on each (1 unit), and only these.' : '';
   $('#bbSub').innerHTML = sub + (list.length ? ` <br><b>${g}</b> to bet${list.length - g ? `, <b>${list.length - g}</b> small` : ''}. ${cands.length - list.length} other props skipped.` : '');
-  const shown = bbMore ? list : list.slice(0, 12);
+  const greens = list.filter(o => o.v.tone === 'g'), shown = bbMore ? list : greens.length ? greens.slice(0, 8) : list.slice(0, 4);
   box.innerHTML = list.length ? shown.map((o, i) => { bbRows.push(o.x); return bbCard(o.x, o.v, i, i === 0 && o.v.tone === 'g' && o.x.odds >= -200); }).join('')
     : (cands.length && labDocs.length ? `<div class="panel"><div class="empty"><b>No bets today</b>Nothing fits a winning strategy on this day. Skipping is a smart bet too.</div></div>` : '');
-  $('#bbMoreWrap').innerHTML = list.length > shown.length ? `<button class="btn sec bb-moreb" data-bbmore="1">Show ${list.length - shown.length} more</button>` : '';
+  $('#bbMoreWrap').innerHTML = list.length > shown.length ? `<button class="btn sec bb-moreb" data-bbmore="1">Show ${list.length - shown.length} more (${list.length - greens.length > 0 ? 'small bets included' : 'proven'})</button>` : '';
 }
 
 /* ---------- defense tab ---------- */
@@ -4158,6 +4229,8 @@ function renderAll(){
 /* ---------- events ---------- */
 $$('.tab').forEach(b => b.addEventListener('click', () => setTab(b.dataset.tab)));
 $('#fab').addEventListener('click', () => setTab('parlay'));
+document.addEventListener('click', e => { if (!e.target.closest('[data-sharp]')) return; S.sharpOn = S.sharpOn === false; lsSet(LSP+'sharpOn', S.sharpOn); renderAll(); if (S.tab === 'tracker') renderLab(); });
+S.sharpOn = lsGet(LSP+'sharpOn') !== false;
 $('#scBody').addEventListener('change', e => {
   const li = e.target.closest('[data-scl]'), ti = e.target.closest('[data-sct]');
   if (li) { const l = S.slip[+li.dataset.scl], v = parseFloat(li.value); if (l && v >= 0) { l.line = v; saveSlip(); renderParlay(); } return; }
