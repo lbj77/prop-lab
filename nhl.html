@@ -2060,7 +2060,7 @@ function normLines(L){
   for (const [k, v] of Object.entries(L)) {
     if (!v || !STATS[k]) continue;
     const books = {};
-    if (v.books && typeof v.books === 'object') for (const [b, x] of Object.entries(v.books)) { if (x && isFinite(+x.line) && x.line !== null) books[b] = {line:+x.line, over: isFinite(+x.over) && x.over ? +x.over : null, under: isFinite(+x.under) && x.under ? +x.under : null, alt: !!x.alt || isAlt(b)}; }
+    if (v.books && typeof v.books === 'object') for (const [b, x] of Object.entries(v.books)) { if (x && isFinite(+x.line) && x.line !== null) books[b] = {line:+x.line, over: isFinite(+x.over) && x.over ? +x.over : null, under: isFinite(+x.under) && x.under ? +x.under : null, alt: !!x.alt || isAlt(b), ...(x.mod ? {mod: String(x.mod)} : {}), ...(typeof x.s === 'string' ? {s: x.s} : {})}; }
     if (!Object.keys(books).length && isFinite(+v.line)) books[v.book || 'book'] = {line:+v.line, over: +v.over || null, under: +v.under || null};
     if (!Object.keys(books).length) continue;
     const mains = Object.entries(books).filter(([,x]) => !x.alt);
@@ -2221,7 +2221,7 @@ function pjRows(){
       if (!STATS[k]) return; const L = p.lines[k], es = entries(p, k); if (!es.length) return;
       const byLine = {}, std = es.filter(e => !e.alt);
       if (std.length) byLine['m' + L.line] = std;
-      es.filter(e => e.alt && e.mod).forEach(e => { const kk = e.mod + e.line;   /* goblins/demons only; sportsbook alt ladders are left out */ (byLine[kk] = byLine[kk] || []).push(e); });
+      es.filter(e => e.alt && e.mod && (!e.s || e.s.includes(side[0]))).forEach(e => { const kk = e.mod + e.line;   /* goblins/demons only; sportsbook alt ladders are left out */ (byLine[kk] = byLine[kk] || []).push(e); });
       const vals = p.games.map(g => statVal(g, k)), opp = p.next && p.next.opp, vs = opp ? p.games.filter(g => g.opp === opp).map(g => statVal(g, k)) : [];
       Object.entries(byLine).forEach(([kk, bks]) => {
         const isStd = kk[0] === 'm', line = isStd ? +L.line : +bks[0].line, m0 = bks[0].mod;
