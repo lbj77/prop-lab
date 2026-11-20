@@ -838,14 +838,14 @@ main{padding-bottom:90px}
 .pjc-who .s{font-size:12.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .pjc-line{text-align:right}
 .pjc-line .ln{font-family:var(--cond);font-weight:800;font-size:24px;line-height:1}
-.pjc-apps{display:flex;flex-wrap:wrap;gap:4px;align-items:center;margin:8px 0 0 44px}
+.pjc-apps{display:flex;flex-wrap:wrap;gap:4px;align-items:center;margin-top:9px;padding-top:8px;border-top:1px solid var(--line)}
 .pjc-apps .lg{width:20px;height:20px;border-radius:6px;display:inline-flex;align-items:center;justify-content:center;font-size:9.5px;font-weight:900;color:#fff}
 .pjc-apps .apl{display:inline-flex;align-items:center;gap:2px}.pjc-apps .apl i{font-style:normal;font-size:10px;color:var(--muted);font-weight:700}
 .pjc-apps .mult,.pjc-apps .mod{font-size:10.5px;font-weight:800;padding:1px 6px;border-radius:999px;background:#f59e0b;color:#111}
 .pjc-apps .mod.dn{background:#22c55e}
-.pjc-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:3px;margin-top:9px}
-.pjm span{display:flex;flex-direction:column;align-items:center;justify-content:center;height:44px;border-radius:6px;border-bottom:2px solid transparent;color:#fff;font-weight:800;font-size:13.5px;line-height:1.15}
-.pjm i{font-style:normal;font-size:9.5px;font-weight:700;opacity:.8;letter-spacing:.02em}
+.pjc-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:5px;margin-top:10px}
+.pjm span{display:flex;flex-direction:column;align-items:center;justify-content:center;height:54px;border-radius:8px;border-bottom:3px solid transparent;color:#fff;font-weight:800;font-size:18px;line-height:1.1;font-family:var(--cond)}
+.pjm i{font-style:normal;font-size:11px;font-weight:700;opacity:.85;letter-spacing:.04em;font-family:var(--sans,inherit);margin-bottom:2px}
 .sc-fix{margin-top:10px;padding:12px;border-radius:12px;background:var(--over-soft);font-size:16px;line-height:1.45}
 
 .an-chart{margin:14px 0 6px;padding-top:14px;border-top:1px solid var(--line)}
@@ -2326,14 +2326,15 @@ function renderProj(){
     return `<div class="pjc"><div class="pjc-top"><button class="pj-star ${on ? 'on' : ''}" data-pjstar="${i}" aria-label="Add to parlay">${on ? '★' : '☆'}</button>
       <div class="pjc-who" data-pjopen="${i}"><b>${esc(x.p.name)}${x.p.pos ? `<small>${esc(x.p.pos)}</small>` : ''}</b><div class="s">${esc(STATS[x.k].n)} · ${esc(x.p.team)} ${esc(mu)}${x.p.status ? ` · <span class="neg">${esc(x.p.status)}</span>` : ''}</div></div>
       <div class="pjc-line"><div class="ln">${x.line}</div><div class="meta" style="font-size:11px">${P.side === 'over' ? 'Over' : 'Under'}</div></div></div>
-      <div class="pjc-apps">${apps}${modTag}</div>
       <div class="pjc-grid">
-        ${heat(!isFinite(x.ai) ? 'hc-n' : x.ai >= .65 ? 'hc-g3' : x.ai > .55 ? 'hc-g2' : x.ai >= .45 ? 'hc-n' : x.ai >= .35 ? 'hc-r2' : 'hc-r3', 'AI', isFinite(x.ai) ? pct(x.ai) : '—')}
-        ${heat(x.diff >= 2 ? 'hc-g3' : x.diff > 0 ? 'hc-g2' : x.diff <= -2 ? 'hc-r3' : x.diff < 0 ? 'hc-r2' : 'hc-n', 'AVG', f1(x.a10))}
+        ${heat(!isFinite(x.ai) ? 'hc-n' : x.ai >= .65 ? 'hc-g3' : x.ai > .55 ? 'hc-g2' : x.ai >= .45 ? 'hc-n' : x.ai >= .35 ? 'hc-r2' : 'hc-r3', 'AI %', isFinite(x.ai) ? pct(x.ai) : '—')}
+        ${heat(x.diff >= 2 ? 'hc-g3' : x.diff > 0 ? 'hc-g2' : x.diff <= -2 ? 'hc-r3' : x.diff < 0 ? 'hc-r2' : 'hc-n', 'AVG L10', f1(x.a10))}
+        ${heat(x.diff >= 2 ? 'hc-g3' : x.diff > 0 ? 'hc-g2' : x.diff <= -2 ? 'hc-r3' : x.diff < 0 ? 'hc-r2' : 'hc-n', 'DIFF', (x.diff > 0 ? '+' : '') + f1(x.diff))}
         ${['l5','l10','l15'].map(c => heat(hc(x[c]), c.toUpperCase(), isFinite(x[c]) ? pct(x[c]) : '—')).join('')}
         ${heat(hc(x.h2h), 'H2H', isFinite(x.h2h) ? pct(x.h2h) : 'N/A')}
-        ${heat(!isFinite(x.streak) ? 'hc-n' : x.streak >= 5 ? 'hc-g3' : x.streak >= 3 ? 'hc-g2' : x.streak >= 1 ? 'hc-r2' : 'hc-r3', 'STRK', isFinite(x.streak) ? x.streak : '—')}
-      </div></div>`; }).join('') : `<div class="empty">No lines match. ${PJ.length ? 'Clear a filter.' : 'Lines show up after the morning run uploads.'}</div>`;
+        ${heat(!isFinite(x.streak) ? 'hc-n' : x.streak >= 5 ? 'hc-g3' : x.streak >= 3 ? 'hc-g2' : x.streak >= 1 ? 'hc-r2' : 'hc-r3', 'STREAK', isFinite(x.streak) ? x.streak : '—')}
+      </div>
+      <div class="pjc-apps">${apps}${modTag}</div></div>`; }).join('') : `<div class="empty">No lines match. ${PJ.length ? 'Clear a filter.' : 'Lines show up after the morning run uploads.'}</div>`;
   const ss = $('#pjSort'); if (ss) ss.value = `${key}|${dir}`;
   PJ.shownRows = shown;
   $('#pjMore').innerHTML = rows.length > P.n ? `<button class="ghost" id="pjMoreBtn" style="width:auto">Show more (${rows.length - P.n} left)</button>` : '';
