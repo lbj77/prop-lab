@@ -1444,6 +1444,11 @@ details.inj{margin-top:22px!important}
         <div class="ctrl-row" style="margin-top:10px"><button class="ghost" id="pbAddLeg" style="width:auto">+ Add pick</button><button class="btn" id="pbSave" style="width:auto">Save bet</button></div>
         <p class="meta" style="margin:6px 0 0">Type the whole-slip multiplier, or leave it empty and give each pick its own (like 1.10x). Picks are graded by name when that sport’s page loads the games.</p>
       </details>
+      <details class="fold" id="pasteBets"><summary>+ Paste bets (from Claude)</summary>
+        <p class="meta" style="margin:8px 0">Paste the bet text Claude gives you and tap Import. Bets already in your tracker are skipped, so pasting twice is safe.</p>
+        <textarea id="pasteTxt" rows="5" style="width:100%;font-family:monospace;font-size:12px" placeholder='[{"id":"...","legs":[...]}]'></textarea>
+        <div class="ctrl-row" style="margin-top:8px"><button class="btn" id="pasteGo" style="width:auto">Import bets</button></div>
+      </details>
       <div id="myCats"></div>
       <div id="slipList" style="margin-top:10px"></div>
     </div>
@@ -3731,7 +3736,8 @@ const BPER = [['7','7 days'],['30','30 days'],['all','All time']], BFIL = [['all
 S.betPer = lsGet(LSP+'betPer') || 'all'; S.betF = lsGet(LSP+'betF') || 'all';
 const PROMO_NM = {moneyball:'Moneyball', promo:'Promo', boost:'Profit boost', discount:'Discount', free:'Free entry', flex:'Flex'};
 const slipSport = s => { const ss = [...new Set(s.legs.map(l => l.sport || 'nba'))]; return ss.length === 1 ? ss[0].toUpperCase() : 'Mixed'; };
-const slipProfit = s => s.status === 'won' ? s.stake*(s.dec - 1) : s.status === 'lost' ? -s.stake : 0;
+const realStake = s => s.promo === 'free' ? 0 : s.stake;
+const slipProfit = s => s.status === 'won' ? s.stake*s.dec - realStake(s) : s.status === 'lost' ? -realStake(s) : 0;
 function inPer(s){ if (S.betPer === 'all') return true; return Date.now() - new Date(s.at).getTime() <= (+S.betPer)*864e5; }
 function renderBetCtl(){
   const seg = (id, list, cur, attr) => `<div class="seg" id="${id}">${list.map(([v, t]) => `<button ${attr}="${v}" aria-pressed="${cur === v}">${t}</button>`).join('')}</div>`;
@@ -3742,7 +3748,7 @@ function renderBetAnalytics(per){
   const box = $('#betAn'); if (!box) return;
   const st = per.filter(s => !s.sample && (s.status === 'won' || s.status === 'lost'));
   if (!st.length) { box.innerHTML = `<p class="meta" style="margin:10px 0 0">Analytics show up once some bets in this period are settled.</p>`; return; }
-  const group = keyFn => { const g = {}; st.forEach(s => { const k = keyFn(s); const o = g[k] || (g[k] = {k, w:0, l:0, stake:0, pl:0}); s.status === 'won' ? o.w++ : o.l++; o.stake += s.stake; o.pl += slipProfit(s); }); return Object.values(g); };
+  const group = keyFn => { const g = {}; st.forEach(s => { const k = keyFn(s); const o = g[k] || (g[k] = {k, w:0, l:0, stake:0, pl:0}); s.status === 'won' ? o.w++ : o.l++; o.stake += realStake(s); o.pl += slipProfit(s); }); return Object.values(g); };
   const tbl = (title, rows, order) => { if (order) rows.sort((a, b) => order.indexOf(a.k) - order.indexOf(b.k)); else rows.sort((a, b) => (b.w + b.l) - (a.w + a.l));
     return `<div class="ban"><h3>${title}</h3><table><tbody>${rows.map(o => `<tr><td>${esc(o.k)}</td><td class="r">${o.w}–${o.l}</td><td class="r ${o.pl >= 0 ? 'pos' : 'neg'}"><b>${o.pl >= 0 ? '+' : ''}${money(o.pl)}</b></td><td class="r meta">${o.stake ? `${o.pl >= 0 ? '+' : ''}${Math.round(o.pl/o.stake*100)}%` : ''}</td></tr>`).join('')}</tbody></table></div>`; };
   const legTbl = (title, rows) => `<div class="ban"><h3>${title}</h3><table><tbody>${rows.filter(o => o.n).sort((a, b) => b.n - a.n).map(o => { const hp = o.h/o.n;
@@ -3808,7 +3814,7 @@ function betCard(s){
   const placed = new Date(s.at).toLocaleString([], {month:'short', day:'numeric', hour:'numeric', minute:'2-digit'});
   return `<div class="bcard st-${s.status}">
     <div class="bc-top"><div><div class="bc-amt">${money(s.stake)} <span>${won ? 'won' : 'to win'}</span> <span class="bc-pay" style="font-size:inherit;font-weight:800;margin:0;color:${won ? 'var(--over)' : lost ? 'var(--muted)' : 'var(--ink)'};${lost ? 'text-decoration:line-through;' : ''}">${money(pay)}</span></div>
-      <div class="bc-sub">${s.legs.length} Pick${s.legs.length > 1 ? 's' : ''} • ${s.dec.toFixed(2)}x${promo ? `<span class="bc-promo">${esc(promo)}</span>` : ''}${s.graded === 'auto' ? '<span class="auto">auto-graded</span>' : ''}</div></div>
+      <div class="bc-sub">${s.app ? `<b style="color:var(--ink)">${esc(s.app)}</b> • ` : ''}${s.legs.length} Pick${s.legs.length > 1 ? 's' : ''} • ${s.dec.toFixed(2)}x${promo ? `<span class="bc-promo">${esc(promo)}</span>` : ''}${s.graded === 'auto' ? '<span class="auto">auto-graded</span>' : ''}</div></div>
       <button class="bc-more" data-more="${s.id}" aria-label="Bet options" aria-expanded="false">⋯</button></div>
     <div class="bc-legs">${s.legs.map((l, i) => betLeg(l, i, s)).join('')}</div>
     <div class="bc-foot"><span class="bc-res r-${s.status}">${won ? 'Winner' : lost ? 'Loss' : s.status === 'void' ? 'Void' : 'Waiting'}</span><span>Placed: ${placed}</span></div>
@@ -3821,6 +3827,30 @@ function betCard(s){
       <button class="btn" data-save="${s.id}" style="width:auto">Save</button><button class="ghost" data-cancel="${s.id}">Cancel</button>
       <div class="meta" style="flex-basis:100%">Enter what your app showed for the whole parlay. ${oddsHint}</div>
     </div></div>`;
+}
+/* ---------- paste in bets (a JSON list of slips) ---------- */
+async function importBets(){
+  let arr; try { arr = JSON.parse($('#pasteTxt').value.trim()); } catch(e) { toast('That text isn’t in the right format. Copy all of it, including the [ and ].'); return; }
+  if (!Array.isArray(arr)) arr = arr && Array.isArray(arr.slips) ? arr.slips : [arr];
+  let added = 0, skipped = 0;
+  for (const x of arr) {
+    if (!x || !Array.isArray(x.legs) || !x.legs.length || !(+x.dec > 1)) { skipped++; continue; }
+    const id = String(x.id || ('s' + Date.now().toString(36) + added));
+    if (S.slips.some(s => s.id === id)) { skipped++; continue; }
+    const legs = x.legs.map(l => Object.assign({name: String(l.name || '').trim(), team: l.team || '', stat: l.stat, side: l.side === 'under' ? 'under' : 'over', line: +l.line, odds: +l.odds || -110, sport: l.sport || SPORT, date: l.date || String(x.at || '').slice(0, 10)},
+      +l.m > 1 ? {m: +l.m} : {}, l.ltype ? {ltype: l.ltype} : {}));
+    const slip = {id, at: x.at ? new Date(x.at).toISOString() : new Date().toISOString(), added: 'manual', stake: +x.stake || 0, dec: Math.round(+x.dec*1000)/1000, pModel: null,
+      status: ['won','lost','void'].includes(x.status) ? x.status : 'pending', legs};
+    if (Array.isArray(x.results)) slip.results = legs.map((l, i) => { const r = x.results[i]; return r && r.res ? Object.assign({res: r.res, man: true}, isFinite(+r.v) ? {v: +r.v} : {}, l.date ? {d: l.date} : {}) : {res: 'na'}; });
+    if (slip.status !== 'pending') slip.graded = x.graded || 'manual';
+    ['promo','promoName','app','boost'].forEach(k => { if (x[k] != null && x[k] !== '') slip[k] = x[k]; });
+    let ok = false;
+    if (cloud) { try { await cloud.slipsCol.doc(id).set(slip); ok = true; } catch(e){} }
+    if (!ok) { S.slips.unshift(slip); lsSet(LSP+'slips', S.slips); }
+    added++;
+  }
+  toast(`Imported ${added} bet${added === 1 ? '' : 's'}${skipped ? `, skipped ${skipped}` : ''}`);
+  if (added) { $('#pasteTxt').value = ''; $('#pasteBets').open = false; renderTracker(); setTimeout(autoGrade, 300); }
 }
 /* ---------- add a bet you placed but didn't save in Prop Lab ---------- */
 const SPORT_STATS = {nba:['PTS','REB','AST','3PM','PRA','PR','PA','RA','STL','BLK','S+B','TOV'],
@@ -4093,7 +4123,7 @@ async function downloadBetsPdf(){
       });
       y += 14;
       staked += s.stake; if (s.status !== 'lost') toPay += s.status === 'void' ? s.stake : s.stake * s.dec;
-      if (s.status === 'won') settledProfit += s.stake * (s.dec - 1); else if (s.status === 'lost') settledProfit -= s.stake;
+      settledProfit += slipProfit(s);
     });
     need(60); doc.setDrawColor(20,30,50); doc.line(M, y - 10, W - M, y - 10); y += 6;
     text(`${list.length} bet${list.length>1?'s':''}, ${money(staked)} staked`, M, 12, 'bold'); y += 16;
@@ -4124,8 +4154,8 @@ function renderTracker(){
   const all = [...S.slips].sort((a,b)=> a.at < b.at ? 1 : -1), sl = all.filter(inPer);
   const settled = sl.filter(s=>s.status==='won' || s.status==='lost');
   const won = settled.filter(s=>s.status==='won');
-  const profit = settled.reduce((m,s)=> m + (s.status==='won' ? s.stake*(s.dec-1) : -s.stake), 0);
-  const staked = settled.reduce((m,s)=>m+s.stake,0);
+  const profit = settled.reduce((m,s)=> m + slipProfit(s), 0);
+  const staked = settled.reduce((m,s)=>m+realStake(s),0);
   const withModel = settled.filter(s => s.pModel != null), expHits = withModel.reduce((m,s)=>m+(s.pModel||0),0), wonM = withModel.filter(s => s.status==='won').length;
   $('#trackStats').innerHTML = [
     ['Record', settled.length ? `${won.length}–${settled.length-won.length}` : '0–0'],
@@ -4137,7 +4167,7 @@ function renderTracker(){
     ? `${settled.length} settled, ${sl.length-settled.length} pending.${withModel.length ? ` The model expected ${expHits.toFixed(1)} hits and you got ${wonM}${wonM>=expHits?', so it’s holding up so far.':', so it’s running hot on its estimates. Give it more slips before trusting it.'}` : ''}${cloud?'':' Saved on this device only.'}`
     : `Mark each saved parlay as it settles to see whether the model’s chances hold up.${cloud?'':' Saved on this device only.'}`;
   // chart
-  const chron = [...settled].reverse(); let run = 0; const pts = chron.map(s => run += (s.status==='won' ? s.stake*(s.dec-1) : -s.stake));
+  const chron = [...settled].reverse(); let run = 0; const pts = chron.map(s => run += slipProfit(s));
   const o = chartBase(); o.scales.y.beginAtZero = false; o.scales.y.ticks.callback = v => '$'+v;
   o.plugins.tooltip.callbacks = { label: it => `Running total ${money(it.raw)}` };
   mk('pnlChart', { type:'line', data:{ labels: chron.map(s => fmtDate(s.at.slice(0,10))), datasets:[{data:pts, borderColor:cssv('--ball'), backgroundColor:cssv('--ball-soft'), fill:true, tension:.25, pointRadius:3, pointBackgroundColor: chron.map(s => s.status==='won'?cssv('--over'):cssv('--under'))}] }, options:o });
@@ -5183,6 +5213,7 @@ $('#pbLegs').addEventListener('change', e => { const row = e.target.closest('.pb
 $('#pbLegs').addEventListener('click', e => { const d = e.target.closest('[data-pbdel]'); if (!d || !PB) return; PB.splice(+d.dataset.pbdel, 1); if (!PB.length) PB.push(pbBlank()); renderPastBet(); });
 $('#pbAddLeg').addEventListener('click', () => { if (!PB) renderPastBet(); const last = PB[PB.length - 1]; PB.push(Object.assign(pbBlank(), {sport: last ? last.sport : SPORT, stat: last ? last.stat : SPORT_STATS[SPORT][0]})); renderPastBet(); });
 $('#pbSave').addEventListener('click', savePastBet);
+$('#pasteGo').addEventListener('click', importBets);
 $('#myCats').addEventListener('click', e => { const b = e.target.closest('[data-mystrat]'); if (!b) return; S.strat = b.dataset.mystrat; lsSet(LSP+'strat', S.strat); pushSync(); renderStratSel(); toast(`Best bets now use \u201C${catName(S.strat)}\u201D`); setTab('today'); });
 $('#myCats').addEventListener('toggle', e => { S.myCatsOpen = e.target.open; }, true);
 $('#slipList').addEventListener('click', e => {
