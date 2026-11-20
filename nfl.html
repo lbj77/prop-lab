@@ -817,6 +817,35 @@ main{padding-bottom:90px}
 .pj-star{width:34px;height:34px;border-radius:9px;border:1px solid var(--line);background:none;color:var(--muted);font-size:17px;padding:0}
 .pj-star.on{background:var(--ball);border-color:var(--ball);color:var(--on-accent,#001)}
 .pj-more{display:flex;justify-content:center;margin-top:10px}
+/* ---------- Projections on phones: one card per line ---------- */
+#pjCards{display:none}
+#pjSortBox{display:none}
+@media(max-width:640px){
+  #view-proj .pj-wrap{display:none}
+  #pjCards{display:flex;flex-direction:column;gap:10px}
+  #pjSortBox{display:block;grid-column:1/-1}
+  #view-proj .panel{padding:12px}
+  .pj-top{gap:8px}
+  .pj-top h2{font-size:22px}
+  .pj-f{gap:6px}
+  .pj-f select,.pj-f input{font-size:14px;padding:9px 10px}
+}
+.pjc{border:1px solid var(--line);border-radius:14px;background:var(--panel2);padding:10px}
+.pjc-top{display:grid;grid-template-columns:34px minmax(0,1fr) auto;gap:10px;align-items:center}
+.pjc-who{min-width:0;cursor:pointer}
+.pjc-who b{font-size:15px;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pjc-who b small{font-weight:600;color:var(--muted);font-size:12px;margin-left:3px}
+.pjc-who .s{font-size:12.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pjc-line{text-align:right}
+.pjc-line .ln{font-family:var(--cond);font-weight:800;font-size:24px;line-height:1}
+.pjc-apps{display:flex;flex-wrap:wrap;gap:4px;align-items:center;margin:8px 0 0 44px}
+.pjc-apps .lg{width:20px;height:20px;border-radius:6px;display:inline-flex;align-items:center;justify-content:center;font-size:9.5px;font-weight:900;color:#fff}
+.pjc-apps .apl{display:inline-flex;align-items:center;gap:2px}.pjc-apps .apl i{font-style:normal;font-size:10px;color:var(--muted);font-weight:700}
+.pjc-apps .mult,.pjc-apps .mod{font-size:10.5px;font-weight:800;padding:1px 6px;border-radius:999px;background:#f59e0b;color:#111}
+.pjc-apps .mod.dn{background:#22c55e}
+.pjc-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:3px;margin-top:9px}
+.pjm span{display:flex;flex-direction:column;align-items:center;justify-content:center;height:44px;border-radius:6px;border-bottom:2px solid transparent;color:#fff;font-weight:800;font-size:13.5px;line-height:1.15}
+.pjm i{font-style:normal;font-size:9.5px;font-weight:700;opacity:.8;letter-spacing:.02em}
 .sc-fix{margin-top:10px;padding:12px;border-radius:12px;background:var(--over-soft);font-size:16px;line-height:1.45}
 
 .an-chart{margin:14px 0 6px;padding-top:14px;border-top:1px solid var(--line)}
@@ -1044,12 +1073,12 @@ details.inj{margin-top:22px!important}
     </div>
     <div class="data-badge" id="dataBadge"><i class="dot"></i><span>Loading…</span></div>
     <nav class="tabs" role="tablist" aria-label="Sections">
-      <button class="tab" role="tab" data-tab="today" aria-selected="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 6.5 7 .8-5.2 4.8 1.4 7L12 17.8 5.8 21l1.4-7L2 9.3l7-.8z"/></svg><span>Today</span></button>
-      <button class="tab" role="tab" data-tab="proj" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M3 5h18M3 10h18M3 15h18M3 20h18M9 5v15"/></svg><span>Projections</span></button>
+      <button class="tab" role="tab" data-tab="proj" aria-selected="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M3 5h18M3 10h18M3 15h18M3 20h18M9 5v15"/></svg><span>Projections</span></button>
+      <button class="tab" role="tab" data-tab="analyzer" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg><span>Player</span></button>
+      <button class="tab" role="tab" data-tab="today" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 6.5 7 .8-5.2 4.8 1.4 7L12 17.8 5.8 21l1.4-7L2 9.3l7-.8z"/></svg><span>Today</span></button>
       <button class="tab" role="tab" data-tab="alerts" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg><span>Alerts</span></button>
       <button class="tab" role="tab" data-tab="injuries" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="4"/><path d="M12 8v8M8 12h8"/></svg><span>Injuries</span></button>
       <button class="tab" role="tab" data-tab="finder" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg><span>Odds</span></button>
-      <button class="tab" role="tab" data-tab="analyzer" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg><span>Player</span></button>
       <button class="tab" role="tab" data-tab="bets" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v3a2 2 0 0 0 0 4v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-3a2 2 0 0 0 0-4z"/><path d="M13 5v2M13 11v2M13 17v2"/></svg><span>Bets</span></button>
       <button class="tab" role="tab" data-tab="tracker" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/></svg><span>Lab</span></button>
       <button class="tab" hidden role="tab" data-tab="parlay" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l9 5-9 5-9-5z"/><path d="M3 13l9 5 9-5"/></svg><span>Parlay</span> <span class="count" id="tabCount" hidden>0</span></button>
@@ -1077,7 +1106,7 @@ details.inj{margin-top:22px!important}
   </section>
 
   <!-- TODAY -->
-  <section class="view" id="view-today">
+  <section class="view" id="view-today" hidden>
     <div id="alertBox"></div>
     <div class="panel">
       <h2>Best bets today</h2>
@@ -1124,7 +1153,7 @@ details.inj{margin-top:22px!important}
   </section>
 
   <!-- ALERTS -->
-  <section class="view" id="view-proj" hidden>
+  <section class="view" id="view-proj">
     <div class="panel">
       <div class="pj-top"><h2>Projections</h2><span class="pj-upd" id="pjUpd"></span><div class="seg side" id="pjSide"><button data-v="over" aria-pressed="true">Over</button><button data-v="under" aria-pressed="false">Under</button></div><span class="meta" id="pjCount"></span></div>
       <div class="pj-f">
@@ -1133,8 +1162,10 @@ details.inj{margin-top:22px!important}
         <select class="ghost" id="pjStat" aria-label="Stat"></select>
         <select class="ghost" id="pjApp" aria-label="App"></select>
         <select class="ghost" id="pjMod" aria-label="Line type"><option value="">Any modifier</option><option value="std">Standard lines</option><option value="dn">Goblins (easier)</option><option value="up">Demons (harder)</option></select>
+        <div id="pjSortBox"><select class="ghost" id="pjSort" aria-label="Sort by"><option value="ai|-1">Sort: AI % (best first)</option><option value="l10|-1">Sort: L10 hit rate</option><option value="l5|-1">Sort: L5 hit rate</option><option value="l15|-1">Sort: L15 hit rate</option><option value="h2h|-1">Sort: H2H hit rate</option><option value="streak|-1">Sort: Streak</option><option value="diff|-1">Sort: Avg vs line</option><option value="line|-1">Sort: Line (high to low)</option><option value="name|1">Sort: Name (A to Z)</option></select></div>
       </div>
       <div class="pj-wrap"><table class="pjt" id="pjTbl"></table></div>
+      <div id="pjCards"></div>
       <div class="pj-more" id="pjMore"></div>
       <p class="meta" style="font-size:12px;margin-top:8px">AI % is the model’s chance he goes over (or under) this line tonight, built from his recent games, minutes, the opponent’s defense, home/away, rest and the sharp line. Hit rates are how often he went over (or under) this exact line in his last 5, 10 and 15 games, and in past games against tonight’s opponent (H2H). Streak = games in a row he hit it (green = 3 or more, red = 2 or fewer). Tap a column to sort, a name to open the player, the star to add it to your parlay.</p>
     </div>
@@ -1656,7 +1687,7 @@ const S = {
   stake: 10,
   f: Object.assign({stats:CFG.finder.slice(), hit:70, l30:60, prob:55, side:'both', lines:'all', today:'all', sort:'score', dir:-1, legs:3}, lsGet(LSP+'f')||{}),
   t: Object.assign({mode:'safe', stats:'main', perGame:2, lines:'all', oddsMin:-10000}, lsGet(LSP+'t')||{}),
-  tab:'today'
+  tab:'proj'
 };
 let cloud = null; // {db, assets, uid, stateRef, slipsCol}
 let viewerIsOwner = false, sharedDb = null, SHARED = null;
@@ -2285,6 +2316,25 @@ function renderProj(){
         <td class="hc ${hc(x.h2h)}"><span title="${x.h2hN} games vs ${n ? esc(n.opp) : ''}">${isFinite(x.h2h) ? pct(x.h2h) : 'N/A'}</span></td>
         <td class="hc ${!isFinite(x.streak) ? 'hc-n' : x.streak >= 5 ? 'hc-g3' : x.streak >= 3 ? 'hc-g2' : x.streak >= 1 ? 'hc-r2' : 'hc-r3'}"><span>${isFinite(x.streak) ? x.streak : '—'}</span></td></tr>`; }).join('') +
     (shown.length ? '' : `<tr><td colspan="12" class="meta" style="padding:18px;text-align:center">No lines match. ${PJ.length ? 'Clear a filter.' : 'Lines show up after the morning run uploads.'}</td></tr>`) + '</tbody>';
+  // phones: the same rows as cards
+  const heat = (cls, label, val) => `<div class="pjm ${cls}"><span><i>${label}</i>${val}</span></div>`;
+  $('#pjCards').innerHTML = shown.length ? shown.map((x, i) => { const n = x.p.next, mu = n ? (n.home ? `vs ${n.opp}` : `@ ${n.opp}`) : '';
+    const seen = new Set(), uniq = x.bks.filter(e => !seen.has(e.base) && seen.add(e.base)).sort((a, b) => (a.line !== x.line) - (b.line !== x.line) || BOOK_ORDER.indexOf(a.base) - BOOK_ORDER.indexOf(b.base));
+    const apps = uniq.slice(0, 8).map(e => { const pr = e.alt ? priceOf(e, P.side) : null; return `<span class="apl">${bkLogo(e.book)}${!e.alt && e.line !== x.line ? `<i>${e.line}</i>` : ''}</span>` + (pr != null && isFinite(pr) ? `<span class="mult">${amToDec(pr).toFixed(2)}x</span>` : ''); }).join('') + (uniq.length > 8 ? `<span class="meta">+${uniq.length - 8}</span>` : '');
+    const modTag = x.mod !== 'std' ? `<span class="mod ${x.mod}">${x.bks[0].mod === 'goblin' ? 'Goblin' : x.bks[0].mod === 'demon' ? 'Demon' : x.mod === 'dn' ? 'Easier' : 'Harder'}</span>` : '';
+    const on = inSlip(x);
+    return `<div class="pjc"><div class="pjc-top"><button class="pj-star ${on ? 'on' : ''}" data-pjstar="${i}" aria-label="Add to parlay">${on ? '★' : '☆'}</button>
+      <div class="pjc-who" data-pjopen="${i}"><b>${esc(x.p.name)}${x.p.pos ? `<small>${esc(x.p.pos)}</small>` : ''}</b><div class="s">${esc(STATS[x.k].n)} · ${esc(x.p.team)} ${esc(mu)}${x.p.status ? ` · <span class="neg">${esc(x.p.status)}</span>` : ''}</div></div>
+      <div class="pjc-line"><div class="ln">${x.line}</div><div class="meta" style="font-size:11px">${P.side === 'over' ? 'Over' : 'Under'}</div></div></div>
+      <div class="pjc-apps">${apps}${modTag}</div>
+      <div class="pjc-grid">
+        ${heat(!isFinite(x.ai) ? 'hc-n' : x.ai >= .65 ? 'hc-g3' : x.ai > .55 ? 'hc-g2' : x.ai >= .45 ? 'hc-n' : x.ai >= .35 ? 'hc-r2' : 'hc-r3', 'AI', isFinite(x.ai) ? pct(x.ai) : '—')}
+        ${heat(x.diff >= 2 ? 'hc-g3' : x.diff > 0 ? 'hc-g2' : x.diff <= -2 ? 'hc-r3' : x.diff < 0 ? 'hc-r2' : 'hc-n', 'AVG', f1(x.a10))}
+        ${['l5','l10','l15'].map(c => heat(hc(x[c]), c.toUpperCase(), isFinite(x[c]) ? pct(x[c]) : '—')).join('')}
+        ${heat(hc(x.h2h), 'H2H', isFinite(x.h2h) ? pct(x.h2h) : 'N/A')}
+        ${heat(!isFinite(x.streak) ? 'hc-n' : x.streak >= 5 ? 'hc-g3' : x.streak >= 3 ? 'hc-g2' : x.streak >= 1 ? 'hc-r2' : 'hc-r3', 'STRK', isFinite(x.streak) ? x.streak : '—')}
+      </div></div>`; }).join('') : `<div class="empty">No lines match. ${PJ.length ? 'Clear a filter.' : 'Lines show up after the morning run uploads.'}</div>`;
+  const ss = $('#pjSort'); if (ss) ss.value = `${key}|${dir}`;
   PJ.shownRows = shown;
   $('#pjMore').innerHTML = rows.length > P.n ? `<button class="ghost" id="pjMoreBtn" style="width:auto">Show more (${rows.length - P.n} left)</button>` : '';
 }
@@ -5081,7 +5131,8 @@ $('#oppSel').addEventListener('change', e => { S.opp = e.target.value; renderAna
 $('#pjSide').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; S.pj.side = b.dataset.v; pjSave(); renderProj(); });
 $('#pjQ').addEventListener('input', e => { S.pj.q = e.target.value; S.pj.n = 150; renderProj(); });
 [['pjGame','game'], ['pjStat','stat'], ['pjApp','app'], ['pjMod','mod']].forEach(([id, k]) => $('#' + id).addEventListener('change', e => { S.pj[k] = e.target.value; S.pj.n = 150; pjSave(); renderProj(); }));
-$('#pjTbl').addEventListener('click', e => {
+$('#pjSort').addEventListener('change', e => { const [k, d] = e.target.value.split('|'); S.pj.sort = k; S.pj.dir = +d; pjSave(); renderProj(); });
+$('#view-proj').addEventListener('click', e => {
   const h = e.target.closest('[data-pjs]'); if (h) { const k = h.dataset.pjs; if (S.pj.sort === k) S.pj.dir = -S.pj.dir; else { S.pj.sort = k; S.pj.dir = k === 'name' ? 1 : -1; } pjSave(); renderProj(); return; }
   const rows = PJ.shownRows || [];
   const st = e.target.closest('[data-pjstar]'); if (st) { const x = rows[+st.dataset.pjstar]; if (!x) return; const b = bookFor(x.p, x.k), bk = x.bks[0];
