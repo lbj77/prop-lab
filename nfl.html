@@ -1136,7 +1136,7 @@ details.inj{margin-top:22px!important}
       </div>
       <div class="pj-wrap"><table class="pjt" id="pjTbl"></table></div>
       <div class="pj-more" id="pjMore"></div>
-      <p class="meta" style="font-size:12px;margin-top:8px">Hit rates are how often he went over (or under) this exact line in his last 5, 10 and 15 games, and in past games against tonight’s opponent (H2H). Streak = games in a row he hit it (green = 3 or more, red = 2 or fewer). Tap a column to sort, a name to open the player, the star to add it to your parlay.</p>
+      <p class="meta" style="font-size:12px;margin-top:8px">AI % is the model’s chance he goes over (or under) this line tonight, built from his recent games, minutes, the opponent’s defense, home/away, rest and the sharp line. Hit rates are how often he went over (or under) this exact line in his last 5, 10 and 15 games, and in past games against tonight’s opponent (H2H). Streak = games in a row he hit it (green = 3 or more, red = 2 or fewer). Tap a column to sort, a name to open the player, the star to add it to your parlay.</p>
     </div>
   </section>
   <section class="view" id="view-alerts" hidden>
@@ -2235,7 +2235,8 @@ function pjRows(){
         let streak = 0; for (const v of vals) { if (!(side === 'over' ? v > line : v < line)) break; streak++; }
         const first = vals.length ? true : null;
         const a10 = mean(vals.slice(0, 10));
-        out.push({p, k, line, mod, bks, a10, diff: side === 'over' ? a10 - line : line - a10, l5: hr(vals.slice(0, 5)), l10: hr(vals.slice(0, 10)), l15: hr(vals.slice(0, 15)), h2h: vs.length ? hr(vs) : NaN, h2hN: vs.length, streak: first === null ? NaN : streak});
+        let ai = NaN, proj = NaN; try { const ev = evalProp(p, k, line, side, {minMin: S.minMin}); ai = ev.prob; proj = ev.proj; } catch(e) {}
+        out.push({p, k, line, mod, bks, a10, ai, proj, diff: side === 'over' ? a10 - line : line - a10, l5: hr(vals.slice(0, 5)), l10: hr(vals.slice(0, 10)), l15: hr(vals.slice(0, 15)), h2h: vs.length ? hr(vs) : NaN, h2hN: vs.length, streak: first === null ? NaN : streak});
       });
     });
   });
@@ -2264,7 +2265,7 @@ function renderProj(){
     if (key === 'name') return dir * String(va).localeCompare(String(vb));
     const na = isFinite(va) ? va : -1e9, nb = isFinite(vb) ? vb : -1e9; return dir * (na - nb) || (b.l10 || 0) - (a.l10 || 0); });
   $('#pjCount').textContent = `${rows.length} lines`;
-  const cols = [['name','Player','l'], ['line','Line'], [null,'App(s)'], ['a10','Avg L10'], ['diff','Diff'], ['l5','L5'], ['l10','L10'], ['l15','L15'], ['h2h','H2H'], ['streak','Streak']];
+  const cols = [['name','Player','l'], ['line','Line'], [null,'App(s)'], ['ai','AI %'], ['a10','Avg L10'], ['diff','Diff'], ['l5','L5'], ['l10','L10'], ['l15','L15'], ['h2h','H2H'], ['streak','Streak']];
   const hc = v => !isFinite(v) ? 'hc-n' : v >= .7 ? 'hc-g3' : v > .5 ? 'hc-g2' : v === .5 ? 'hc-n' : v > .3 ? 'hc-r2' : 'hc-r3';
   const inSlip = x => S.slip.some(l => mine(l) && l.pid === x.p.id && l.stat === x.k && l.side === P.side && l.line === x.line);
   const shown = rows.slice(0, P.n);
@@ -2277,12 +2278,13 @@ function renderProj(){
         <td class="pl"><div class="who" data-pjopen="${i}">${esc(x.p.name)}${x.p.pos ? `<small>(${esc(x.p.pos)})</small>` : ''}</div><div class="sub2">${x.line} ${esc(STATS[x.k].n)} · ${esc(mu)}${x.p.status ? ` · <span class="neg">${esc(x.p.status)}</span>` : ''}</div></td>
         <td class="ln">${x.line}</td>
         <td><div class="apps">${logos}${x.mod !== 'std' ? `<span class="mod ${x.mod}">${x.bks[0].mod === 'goblin' ? 'Goblin' : x.bks[0].mod === 'demon' ? 'Demon' : x.mod === 'dn' ? '↓ easier' : '↑ harder'}</span>` : ''}</div></td>
+        <td class="hc ${!isFinite(x.ai) ? 'hc-n' : x.ai >= .65 ? 'hc-g3' : x.ai > .55 ? 'hc-g2' : x.ai >= .45 ? 'hc-n' : x.ai >= .35 ? 'hc-r2' : 'hc-r3'}"><span title="Model projects ${isFinite(x.proj) ? f1(x.proj) : '?'}">${isFinite(x.ai) ? pct(x.ai) : '—'}</span></td>
         <td class="hc ${x.diff > 0 ? 'hc-g2' : x.diff < 0 ? 'hc-r2' : 'hc-n'}"><span>${f1(x.a10)}</span></td>
         <td class="hc ${x.diff >= 2 ? 'hc-g3' : x.diff > 0 ? 'hc-g2' : x.diff <= -2 ? 'hc-r3' : x.diff < 0 ? 'hc-r2' : 'hc-n'}"><span>${x.diff > 0 ? '+' : ''}${f1(x.diff)}</span></td>
         ${['l5','l10','l15'].map(c => `<td class="hc ${hc(x[c])}"><span>${isFinite(x[c]) ? pct(x[c]) : '—'}</span></td>`).join('')}
         <td class="hc ${hc(x.h2h)}"><span title="${x.h2hN} games vs ${n ? esc(n.opp) : ''}">${isFinite(x.h2h) ? pct(x.h2h) : 'N/A'}</span></td>
         <td class="hc ${!isFinite(x.streak) ? 'hc-n' : x.streak >= 5 ? 'hc-g3' : x.streak >= 3 ? 'hc-g2' : x.streak >= 1 ? 'hc-r2' : 'hc-r3'}"><span>${isFinite(x.streak) ? x.streak : '—'}</span></td></tr>`; }).join('') +
-    (shown.length ? '' : `<tr><td colspan="11" class="meta" style="padding:18px;text-align:center">No lines match. ${PJ.length ? 'Clear a filter.' : 'Lines show up after the morning run uploads.'}</td></tr>`) + '</tbody>';
+    (shown.length ? '' : `<tr><td colspan="12" class="meta" style="padding:18px;text-align:center">No lines match. ${PJ.length ? 'Clear a filter.' : 'Lines show up after the morning run uploads.'}</td></tr>`) + '</tbody>';
   PJ.shownRows = shown;
   $('#pjMore').innerHTML = rows.length > P.n ? `<button class="ghost" id="pjMoreBtn" style="width:auto">Show more (${rows.length - P.n} left)</button>` : '';
 }
@@ -3799,7 +3801,7 @@ function betLeg(l, i, s){
     <div style="min-width:0"><div class="bl-name">${esc(l.name)}${r && r.bonus ? `<span class="bl-man">${v - r.bonus} + ${r.bonus} Moneyball</span>` : ''}${r && r.man ? '<span class="bl-man">set by you</span>' : ''}</div><div class="bl-meta">${meta}</div></div>
     <div class="bl-line"><span class="${l.side === 'over' ? 'up' : 'dn'}">${l.side === 'over' ? '↑' : '↓'}</span> ${l.line}<small>${esc(sw)}</small></div></div>
     ${k === 'void' ? '<div class="bl-meta" style="margin:6px 0 0 50px">Did not play</div>' : `<div class="bl-bar"><div class="fill" style="width:${(fill*100).toFixed(1)}%"></div>${v != null ? `<span class="val" style="left:${Math.max(4, fill*100).toFixed(1)}%">${v}</span>` : ''}</div>`}
-    ${(legCat(l, s) || {}).none ? '' : catHtml(l, s)}
+    ${catHtml(l, s)}
     <button class="bl-ed" data-legedit="${s.id}|${i}">Fix result</button>
     <div class="bl-form" data-legform="${s.id}|${i}" hidden>
       <label>He had <input class="num" type="number" step="0.5" min="0" inputmode="decimal" value="${v ?? ''}" data-legv> ${esc(sw)}</label>
@@ -3911,15 +3913,24 @@ function legCat(l, s){
   const m = labIndex(), d0 = l.date || ymd(new Date(s.at)), n = normName(l.name);
   let row = m[`${d0}|${n}|${l.stat}`];
   if (!row) { const d1 = ymd(new Date(new Date(d0 + 'T12:00:00').getTime() + 864e5)); row = m[`${d1}|${n}|${l.stat}`]; }
-  if (!row) return {none: true};
+  if (!row) {
+    // today's or upcoming bets with no lab record: check the strategies right now, at the exact line and side you took
+    const p = d0 >= ymd(new Date()) ? S.players.find(x => normName(x.name) === n) : null;
+    if (!p || !STATS[l.stat] || isOut(p.id)) return {none: true};
+    const line = +l.line, lean = evalProp(p, l.stat, line, 'over').prob >= .5 ? 'over' : 'under';
+    const odds = +l.odds || -110, rr = evalProp(p, l.stat, line, l.side), x = {p, k: l.stat, line, side: l.side, odds, r: rr, edge: rr.prob - implied(odds), score: rr.score, book: true};
+    let flags = []; try { flags = LAB.filter(st => !st.t || st.t(x)).map(st => st.id).filter(f => f !== 'all'); } catch(e) {}
+    return lean !== l.side ? {against: true, flags: [], live: true} : {flags, live: true};
+  }
   if (row.side !== l.side) return {against: true, flags: []};
   return {flags: row.flags};
 }
 const catName = id => (stratById(id) || {n: id}).n;
 function catHtml(l, s){
-  const c = legCat(l, s); if (!c) return '';
-  if (c.none) return '<span class="lcat">Not in that day’s Strategy lab (no main line)</span>';
-  if (c.against) return '<span class="lcat against"><b>Against</b> the model’s lean that day</span>';
+  const c = legCat(l, s); if (!c) return `<span class="lcat">Strategy fit shows on the ${esc(String(l.sport || s.sport || '').toUpperCase())} page</span>`;
+  if (c.none) return '<span class="lcat">No Strategy-lab record for this pick that day</span>';
+  if (c.against) return `<span class="lcat against"><b>Against</b> the model’s lean${c.live ? ' right now' : ' that day'}</span>`;
+  if (c.live) return `<span class="lcat">${c.flags.length ? `Fits now: <b>${c.flags.slice(0, 4).map(catName).map(esc).join('</b>, <b>')}</b>${c.flags.length > 4 ? ` +${c.flags.length - 4} more` : ''}` : 'Model leans your way, no strategy flags it'}</span>`;
   return `<span class="lcat">${c.flags.length ? `Fit: <b>${c.flags.map(catName).map(esc).join('</b>, <b>')}</b>` : 'Model lean, no strategy flagged it'}</span>`;
 }
 function renderMyCats(){
@@ -3928,7 +3939,7 @@ function renderMyCats(){
   S.slips.forEach(s => { if (s.sample || !Array.isArray(s.legs)) return; s.legs.forEach((l, i) => {
     const r = s.results && s.results[i]; if (!r || (r.res !== 'hit' && r.res !== 'miss')) return; const win = r.res === 'hit';
     const c = legCat(l, s);
-    if (c && !c.none) { if (c.against) add('against', 'Against the model’s lean', win); else if (!c.flags.length) add('nofl', 'Model lean, no strategy', win); else c.flags.forEach(f => add('s:' + f, catName(f), win, f)); }
+    if (c && !c.none && !c.live) { if (c.against) add('against', 'Against the model’s lean', win); else if (!c.flags.length) add('nofl', 'Model lean, no strategy', win); else c.flags.forEach(f => add('s:' + f, catName(f), win, f)); }
     if (l.ltype) add('t:' + l.ltype, ltypeOf(l.ltype)[1], win);
     add('sd:' + l.side, l.side === 'over' ? 'All your overs' : 'All your unders', win);
   }); });
