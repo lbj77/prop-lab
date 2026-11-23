@@ -881,6 +881,26 @@ main{padding-bottom:90px}
 .pjc-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:5px;margin-top:10px}
 .pjm span{display:flex;flex-direction:column;align-items:center;justify-content:center;height:54px;border-radius:8px;border-bottom:3px solid transparent;color:#fff;font-weight:800;font-size:18px;line-height:1.1;font-family:var(--cond)}
 .pjm i{font-style:normal;font-size:11px;font-weight:700;opacity:.85;letter-spacing:.04em;font-family:var(--sans,inherit);margin-bottom:2px}
+/* ---------- Prop Lab picks for today ---------- */
+#pjPicks{margin-bottom:14px}
+.dp-wrap{border:1px solid var(--ball);border-radius:14px;background:linear-gradient(180deg,rgba(61,220,255,.08),transparent);padding:12px}
+.dp-wrap>summary{font-weight:800;font-size:17px;cursor:pointer}
+.dp-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:8px;margin-top:10px}
+.dp{border:1px solid var(--line);border-radius:12px;background:var(--panel);padding:10px;display:flex;flex-direction:column;gap:6px}
+.dp-h{display:flex;justify-content:space-between;gap:8px;align-items:flex-start}
+.dp-h b{font-size:15px}
+.dp-pick{font-family:var(--cond);font-weight:800;font-size:19px}
+.dp-pick .o{color:var(--over)} .dp-pick .u{color:var(--under)}
+.dp-ai{font-family:var(--cond);font-weight:800;font-size:22px;text-align:right;line-height:1}
+.dp-ai small{display:block;font-family:var(--sans,inherit);font-size:10.5px;color:var(--muted);font-weight:700}
+.dp-tags{display:flex;flex-wrap:wrap;gap:4px}
+.dp-tag{font-size:11.5px;font-weight:700;padding:2px 7px;border-radius:999px;background:var(--panel2);color:var(--muted)}
+.dp-tag.g{background:rgba(46,229,157,.15);color:var(--over)} .dp-tag.r{background:rgba(255,92,108,.15);color:var(--under)} .dp-tag.b{background:rgba(61,220,255,.14);color:var(--ball)}
+.dp-slips{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:8px;margin-top:10px}
+.dp-slip{border:1px dashed var(--ball);border-radius:12px;padding:10px;font-size:13.5px}
+.dp-slip b{font-size:14.5px}
+.sch-box{margin-top:12px;padding:10px;border-radius:12px;background:var(--panel2)}
+.sch-box .pf-pill{margin-top:4px}
 .sc-fix{margin-top:10px;padding:12px;border-radius:12px;background:var(--over-soft);font-size:16px;line-height:1.45}
 
 .an-chart{margin:14px 0 6px;padding-top:14px;border-top:1px solid var(--line)}
@@ -1192,6 +1212,7 @@ details.inj{margin-top:22px!important}
   <section class="view" id="view-proj">
     <div class="panel">
       <div class="pj-top"><h2>Projections</h2><span class="pj-upd" id="pjUpd"></span><div class="seg side" id="pjSide"><button data-v="over" aria-pressed="true">Over</button><button data-v="under" aria-pressed="false">Under</button></div><span class="meta" id="pjCount"></span></div>
+      <div id="pjPicks"></div>
       <div class="pj-f">
         <input class="inp" id="pjQ" placeholder="Search for a player or team..." autocomplete="off" enterkeyhint="search">
         <select class="ghost" id="pjGame" aria-label="Game"></select>
@@ -2334,6 +2355,7 @@ function renderProj(){
   $$('#pjSide button').forEach(b => b.setAttribute('aria-pressed', b.dataset.v === P.side));
   const gen = S.data && S.data.generated ? new Date(S.data.generated) : null, mins = gen ? Math.round((Date.now() - gen)/6e4) : null;
   $('#pjUpd').textContent = mins == null ? 'Not updated yet' : mins < 1 ? 'Updated just now' : mins < 60 ? `Updated ${mins} minute${mins === 1 ? '' : 's'} ago` : mins < 1440 ? `Updated ${Math.round(mins/60)} hour${Math.round(mins/60) === 1 ? '' : 's'} ago` : `Updated ${gen.toLocaleDateString([], {month:'short', day:'numeric'})}`;
+  try { renderDailyPicks(); } catch(e) {}
   PJ = pjRows();
   // filter menus
   const games = {}; PJ.forEach(x => { const n = x.p.next; if (!n) return; const k = n.home ? `${n.opp}@${x.p.team}` : `${x.p.team}@${n.opp}`; games[k] = n; });
@@ -2504,6 +2526,7 @@ function renderPfCt(p){
     $('#pfC-matchup').innerHTML = !opp ? '<p class="meta">No game on the next slate.</p>' : `<div class="pf-h3"><b>${esc(p.team)} ${p.next.home ? 'vs' : '@'} ${esc(opp)}</b><span class="meta">${esc(gameWhen(p.next))}</span></div>
       <div>${vs.length ? `<span class="pf-pill ${hitInfo(vs.map(g => statVal(g, S.stat)), S.line, S.side).pct >= .5 ? 'g' : 'r'}">${hitInfo(vs.map(g => statVal(g, S.stat)), S.line, S.side).h}/${vs.length} ${sideTxt.toLowerCase()} ${S.line} vs ${esc(opp)}</span>` : ''}
         <span class="pf-pill n">Model ${pct(r.prob)} ${sideTxt.toLowerCase()}</span><span class="pf-pill n">Proj ${f1(r.proj)}</span>${d ? `<span class="pf-pill ${Math.abs(d.v) < 3 ? 'n' : (S.side === 'over') === (d.v > 0) ? 'g' : 'r'}">${esc(opp)} D: ${d.sv}, ${d.rk}</span>` : ''}${r.nextRest === 1 ? '<span class="pf-pill r">Back-to-back</span>' : ''}</div>
+      ${(() => { try { return schedPlayerHtml(p); } catch(e) { return ''; } })()}
       ${vs.length ? `<table class="pft" style="margin-top:8px"><thead><tr><th>Date</th>${SHOWMIN ? '<th class="r">Min</th>' : ''}<th class="r">${esc(S.stat)}</th></tr></thead><tbody>${vs.slice(0, 12).map(g => { const v = statVal(g, S.stat), ok = v === S.line ? '' : (S.side === 'over' ? v > S.line : v < S.line) ? 'pos' : 'neg';
         return `<tr><td>${esc(fmtDate(g.d))} <span class="meta">${seaLabel(seasonOf(g.d))} ${g.h ? 'home' : 'away'}</span></td>${SHOWMIN ? `<td class="r meta">${Math.round(g.min)}</td>` : ''}<td class="r"><b class="${ok}">${v}</b></td></tr>`; }).join('')}</tbody></table>` : `<p class="meta" style="margin-top:8px">No past games vs ${esc(opp)} on file.</p>`}`;
   }
@@ -3712,6 +3735,104 @@ function renderSched(){
       const head = o.grp !== lastG ? `<tr><td colspan="${E.stats.length + 4}" style="padding-top:12px"><b>${esc(o.grp)}</b></td></tr>` : ''; lastG = o.grp;
       return head + `<tr><td>${esc(o.lab)}</td><td class="r meta">${o.n}</td>${E.stats.map(k => cell(o.s[k])).join('')}${SHOWMIN ? (o.minN >= 30 ? `<td class="r ${o.min/o.minN*100 >= 2 ? 'pos' : o.min/o.minN*100 <= -2 ? 'neg' : ''}">${o.min/o.minN >= 0 ? '+' : ''}${(o.min/o.minN*100).toFixed(1)}%</td>` : '<td class="r meta">—</td>') : ''}${ovr(o)}</tr>`; }).join('')}</tbody></table></div></details>`;
   const fd = $('#schedFold'); if (fd) fd.addEventListener('toggle', e => { S.schedOpen = e.target.open; });
+}
+/* ---------- schedule spot labels (same buckets as the Schedule & travel table) ---------- */
+function schedLabels(f){
+  if (!f || f.rest == null) return [];
+  const out = [['Rest', f.rest === 1 ? 'Back-to-back' : f.rest === 2 ? '1 day off' : f.rest === 3 ? '2 days off' : '3+ days off'],
+    ['Home / road trip', f.home ? 'Home' : f.road >= 4 ? 'Road game 4+' : `Road game ${f.road}`],
+    ['Busy stretch', f.g7 >= 4 ? '4+ games in 7 days' : f.g7 === 3 ? '3 games in 7 days' : '1–2 games in 7 days']];
+  if (f.tz != null) out.push(['Travel', f.tz >= 2 ? 'Flew 2+ zones east' : f.tz === 1 ? '1 zone east' : f.tz === 0 ? 'Same time zone' : f.tz === -1 ? '1 zone west' : 'Flew 2+ zones west']);
+  return out;
+}
+// how much tonight's schedule spot has moved this stat league-wide (from every game on file), signed for the side
+function schedAdj(p, k, side){
+  const f = schedNext(p); if (!f) return {adj: 0, notes: []};
+  const E = schedEffects(), sk = E.stats.includes(k) ? k : (/PTS|PR|PA|3PM/.test(k) && E.stats.includes('PTS') ? 'PTS' : E.stats.includes('PRA') && NBA ? 'PRA' : null);
+  if (!sk) return {adj: 0, notes: []};
+  let tot = 0; const notes = [];
+  schedLabels(f).forEach(([grp, lab]) => { const o = E.rows.find(r => r.grp === grp && r.lab === lab), a = o && o.s[sk]; if (!a || a.length < 30) return;
+    const v = mean(a); if (Math.abs(v) >= .02) notes.push({lab, v}); tot += v; });
+  tot = Math.max(-.08, Math.min(.08, tot));
+  return {adj: (side === 'over' ? 1 : -1) * tot * .5, notes, f};
+}
+/* ---------- Prop Lab picks: model chance + proven strategies + schedule, one per player ---------- */
+let DP = {key: '', list: []};
+function dailyPicks(){
+  const key = [(S.data && S.data.generated) || '', S.book, labDocs.length, S.players.length].join('|');
+  if (DP.key === key) return DP.list;
+  const anyNext = S.players.some(p => p.next), pool = S.players.filter(p => (!anyNext || (p.next && onDay(p))) && !isOut(p.id) && p.lines);
+  const best = {};
+  for (const p of pool) for (const k of Object.keys(p.lines)) {
+    if (!STATS[k] || !entries(p, k).some(e => !e.alt && (S.book === 'any' || e.base === S.book))) continue;
+    for (const side of ['over', 'under']) {
+      if (!sideOK(k, p.lines[k].line, side)) continue;
+      let c; try { c = chooseLine(p, k, side, S.book); } catch(e) { c = null; } if (!c) continue;
+      const r = c.r; if (r.L10.h + r.L10.m < 8 || c.odds < -250) continue;
+      const x = {p, k, line: c.line, side, odds: c.odds, book: true, bk: c.book, r, edge: r.prob - implied(c.odds), score: r.score};
+      let fits = []; try { fits = fitsAll(x); } catch(e) {}
+      const proven = fits.filter(f => f.proven), top = fits[0];
+      const strat = proven.length ? Math.min(.04, .01*proven.length) : top && top.rec.n >= 50 && top.rec.roi > 0 ? .005 : 0;
+      const sa = schedAdj(p, k, side), fin = r.prob + sa.adj + strat;
+      if (r.prob < .55 || fin < .58 || x.edge < -.02) continue;
+      if (!proven.length && !(top && top.rec.n >= 50 && top.rec.roi > 0)) continue;
+      const cur = best[p.id]; if (!cur || fin > cur.fin) best[p.id] = {x, fin, proven, top, sa};
+    }
+  }
+  DP = {key, list: Object.values(best).sort((a, b) => b.fin - a.fin).slice(0, 12)};
+  return DP.list;
+}
+function renderDailyPicks(){
+  const box = $('#pjPicks'); if (!box) return;
+  let list = []; try { list = dailyPicks(); } catch(e) { box.innerHTML = ''; return; }
+  if (!list.length) { box.innerHTML = `<details class="dp-wrap" open><summary>Prop Lab picks for today</summary><p class="meta" style="margin:8px 0 0">No picks clear the bar right now: 58%+ after schedule, a proven strategy (or one with a winning record on 50+ picks) and a fair price. That’s a fine answer. Check back after the next line refresh.</p></details>`; return; }
+  const sw = (x) => (x.p && SPORT) ? statWord(x.k) : x.k;
+  const card = (o, i) => { const x = o.x, inS = S.slip.some(l => mine(l) && l.pid === x.p.id && l.stat === x.k && l.side === x.side);
+    const tags = [...o.proven.slice(0, 2).map(f => `<span class="dp-tag g">${esc(f.n)} ${pct(f.rec.wp)} on ${f.rec.n}</span>`),
+      ...(!o.proven.length && o.top ? [`<span class="dp-tag">${esc(o.top.n)} ${pct(o.top.rec.wp)} on ${o.top.rec.n}</span>`] : []),
+      ...o.sa.notes.map(n => `<span class="dp-tag ${(n.v > 0) === (x.side === 'over') ? 'g' : 'r'}">${esc(n.lab)} ${n.v > 0 ? '+' : ''}${(n.v*100).toFixed(0)}%</span>`),
+      x.r.dfac && isFinite(x.r.dfac) && Math.abs(x.r.dfac - 1) >= .05 ? `<span class="dp-tag ${(x.side === 'over') === (x.r.dfac > 1) ? 'g' : 'r'}">${esc(x.p.next ? x.p.next.opp : '')} D ${x.r.dfac > 1 ? 'soft' : 'tough'}</span>` : '',
+      x.r.oa && Math.abs(x.r.oa.adj) >= 1 ? '<span class="dp-tag b">Teammate out</span>' : ''].filter(Boolean).join('');
+    return `<div class="dp"><div class="dp-h"><div><b>${esc(x.p.name)}</b> <span class="meta">${esc(x.p.team)}${x.p.next ? ` ${x.p.next.home ? 'vs' : '@'} ${esc(x.p.next.opp)}` : ''}</span>
+        <div class="dp-pick"><span class="${x.side === 'over' ? 'o' : 'u'}">${x.side === 'over' ? 'Over' : 'Under'}</span> ${x.line} ${esc(sw(x))} <span class="meta" style="font-size:13px">${fmtOdds(x.odds)}${x.bk ? ' ' + esc(bookName(x.bk)) : ''}</span></div></div>
+      <div class="dp-ai">${pct(o.fin)}<small>Prop Lab chance</small></div></div>
+      <div class="dp-tags">${tags}</div>
+      <div style="display:flex;gap:6px"><button class="add ${inS ? 'on' : ''}" data-dpadd="${i}">${inS ? 'In parlay' : '+ Add'}</button><button class="ghost" data-dpopen="${i}" style="width:auto;padding:4px 10px">Open player</button></div></div>`; };
+  // suggested slips: best picks from different games
+  const slipFrom = n => { const out = [], g = new Set(); for (const o of list) { const gk = gameKey(o.x.p); if (g.has(gk)) continue; g.add(gk); out.push(o); if (out.length === n) break; } return out.length === n ? out : null; };
+  const slips = [2, 3].map(n => slipFrom(n)).filter(Boolean);
+  const be = {2: 1/3, 3: 1/5}, beLeg = n => Math.pow(be[n], 1/n);
+  box.innerHTML = `<details class="dp-wrap" ${S.dpOpen === false ? '' : 'open'} id="dpFold"><summary>Prop Lab picks for today (${list.length})</summary>
+    <p class="meta" style="margin:8px 0 0">Picks where the model, the strategies that are actually winning in your Strategy lab, and tonight’s schedule all agree. Prop Lab chance = model chance, adjusted for rest, travel and road trips, plus a small bump for proven strategies. Standard lines only${S.book !== 'any' ? `, ${esc(bookName(S.book))} lines` : ''}.</p>
+    <div class="dp-list">${list.map(card).join('')}</div>
+    ${slips.length ? `<div class="dp-slips">${slips.map((sl, j) => { const ch = sl.reduce((m, o) => m*o.fin, 1), n = sl.length;
+      return `<div class="dp-slip"><b>Suggested ${n}-pick</b> <span class="meta">(different games)</span><div style="margin:4px 0">${sl.map(o => `${esc(o.x.p.name)} ${o.x.side === 'over' ? 'O' : 'U'} ${o.x.line} ${esc(o.x.k)}`).join(' · ')}</div>
+        <div class="meta">All hit: <b style="color:var(--ink)">${pct(ch)}</b>. A ${n}-pick power play (${n === 2 ? '3x' : '5x'}) needs ${pct(beLeg(n))} per pick to break even${sl.every(o => o.fin >= beLeg(n)) ? ' — every pick clears it' : ' — not every pick clears it'}.</div>
+        <button class="btn" data-dpslip="${j}" style="width:auto;margin-top:6px;padding:6px 12px">Add all ${n} to parlay</button></div>`; }).join('')}</div>` : ''}
+  </details>`;
+  DP.slips = slips;
+  const fd = $('#dpFold'); if (fd) fd.addEventListener('toggle', e => { S.dpOpen = e.target.open; });
+}
+/* ---------- Player tab: tonight's schedule spot and how HE has done in it ---------- */
+function schedPlayerHtml(p){
+  const f = schedNext(p); if (!f) return '';
+  const all = schedOf(p.games, p), bySea = {}; p.games.forEach(g => (bySea[seasonOf(g.d)] = bySea[seasonOf(g.d)] || []).push(g));
+  const avgOf = {}; Object.entries(bySea).forEach(([y, gs]) => avgOf[y] = mean(gs.map(g => statVal(g, S.stat))));
+  const labs = schedLabels(f), E = schedEffects();
+  const rows = labs.map(([grp, lab]) => {
+    const gs = p.games.filter(g => { const ff = all.get(g); return ff && schedLabels(ff).some(([g2, l2]) => g2 === grp && l2 === lab); });
+    const vals = gs.map(g => statVal(g, S.stat)), rel = gs.map(g => { const a = avgOf[seasonOf(g.d)]; return a >= 1 ? statVal(g, S.stat)/a - 1 : 0; });
+    const h = hitInfo(vals, S.line, S.side), n = h.h + h.m;
+    const lg = E.rows.find(r => r.grp === grp && r.lab === lab), sk = E.stats.includes(S.stat) ? S.stat : null, lv = lg && sk && lg.s[sk] && lg.s[sk].length >= 30 ? mean(lg.s[sk]) : null;
+    return `<tr><td><b>${esc(lab)}</b>${lv != null ? `<p class="sub">League: ${lv >= 0 ? '+' : ''}${(lv*100).toFixed(1)}% ${esc(sk)}</p>` : ''}</td><td class="r meta">${gs.length}</td><td class="r">${gs.length ? f1(mean(vals)) : '—'}</td>
+      <td class="r ${gs.length >= 3 ? (mean(rel) >= .03 ? 'pos' : mean(rel) <= -.03 ? 'neg' : '') : ''}">${gs.length ? `${mean(rel) >= 0 ? '+' : ''}${(mean(rel)*100).toFixed(0)}%` : '—'}</td><td class="r">${n ? `${h.h}/${n}` : '—'}</td></tr>`; }).join('');
+  const sa = schedAdj(p, S.stat, S.side);
+  return `<div class="sch-box"><div class="pf-h3"><b>Schedule tonight</b>${sa.adj ? `<span class="pf-pill ${sa.adj > 0 ? 'g' : 'r'}">${sa.adj > 0 ? '+' : ''}${(sa.adj*100).toFixed(1)} pts to the ${S.side}</span>` : ''}</div>
+    <div>${[f.rest === 1 ? '<span class="pf-pill r">Back-to-back</span>' : `<span class="pf-pill ${f.rest >= 3 ? 'g' : 'n'}">${f.rest - 1} day${f.rest === 2 ? '' : 's'} off</span>`,
+      f.home ? '<span class="pf-pill n">Home</span>' : `<span class="pf-pill ${f.road >= 4 ? 'r' : 'n'}">Road game ${f.road}</span>`,
+      f.tz != null && f.tz !== 0 ? `<span class="pf-pill ${f.tz >= 2 ? 'r' : 'n'}">${Math.abs(f.tz)} zone${Math.abs(f.tz) > 1 ? 's' : ''} ${f.tz > 0 ? 'east' : 'west'}</span>` : '',
+      `<span class="pf-pill ${f.g7 >= 4 ? 'r' : 'n'}">${f.g7} games in 7 days</span>`].join('')}</div>
+    <table class="pft" style="margin-top:8px"><thead><tr><th>His games in these spots</th><th class="r">G</th><th class="r">Avg ${esc(S.stat)}</th><th class="r">vs usual</th><th class="r">${S.side === 'over' ? 'Over' : 'Under'} ${S.line}</th></tr></thead><tbody>${rows}</tbody></table></div>`;
 }
 // The owner's lab is also published to a shared spot, so everyone with the link sees the same strategy stats
 const LAB_PUBLIC = 'public/labmeta/days';
@@ -5519,6 +5640,13 @@ $('#view-proj').addEventListener('click', e => {
     toggleX({p: x.p, k: x.k, side: S.pj.side, line: x.line, odds, book: true, bk: bk ? bk.book : null}); renderProj(); return; }
   const o = e.target.closest('[data-pjopen]'); if (o) { const x = rows[+o.dataset.pjopen]; if (!x) return; const bk = x.bks[0];
     openX({p: x.p, k: x.k, side: S.pj.side, line: x.line, odds: (bk && priceOf(bk, S.pj.side)) ?? -110, book: true, bk: bk ? bk.book : null}); }
+});
+$('#pjPicks').addEventListener('click', e => {
+  const a = e.target.closest('[data-dpadd]'), o = e.target.closest('[data-dpopen]'), sl = e.target.closest('[data-dpslip]');
+  const L = DP.list || [];
+  if (a) { const d = L[+a.dataset.dpadd]; if (d) { toggleX(d.x); renderProj(); } return; }
+  if (o) { const d = L[+o.dataset.dpopen]; if (d) openX(d.x); return; }
+  if (sl) { const legs = (DP.slips || [])[+sl.dataset.dpslip] || []; legs.forEach(d => { if (!S.slip.some(l => mine(l) && l.pid === d.x.p.id && l.stat === d.x.k && l.side === d.x.side)) toggleX(d.x); }); renderProj(); }
 });
 $('#pjMore').addEventListener('click', e => { if (e.target.id === 'pjMoreBtn') { S.pj.n += 150; renderProj(); } });
 $('#venSel').addEventListener('change', e => { S.venue = e.target.value; renderAnalyzer(); });
