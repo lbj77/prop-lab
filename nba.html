@@ -2242,7 +2242,7 @@ function renderStale(){
       <span class="pp">${pct(x.fair)}</span><span class="pe pos">+${(x.edge*100).toFixed(1)}%</span></button>`; }).join('');
 }
 function entries(p, stat){ const L = p.lines && p.lines[stat]; if (!L || !L.books) return []; return Object.entries(L.books).filter(([b]) => !REF_BOOKS.has(baseBook(b))).map(([b,x]) => ({book:b, base:baseBook(b), line:x.line, over:x.over, under:x.under, dfs:DFS.has(b), alt:!!x.alt || isAlt(b), mod:x.mod || ''})); }
-function priceOf(e, side){ if (e.s && !e.s.includes(side[0])) return null; if (e.dfs && !e.alt) return decToAm(1/dfsBE(3)); const v = side==='over' ? e.over : e.under; return v && isFinite(v) ? v : null; }
+function priceOf(e, side){ if (e.mod) return null; if (e.s && !e.s.includes(side[0])) return null; if (e.dfs && !e.alt) return decToAm(1/dfsBE(3)); const v = side==='over' ? e.over : e.under; return v && isFinite(v) ? v : null; }
 // anytime-TD unders (0.5) are rarely offered and are a trap to rank: skip them
 const sideOK = (k, line, side) => NBA || !(YESNO.includes(k) && side === 'under' && +line <= .5);
 function chooseLine(p, stat, side, book){
@@ -3767,9 +3767,11 @@ function dailyPicks(){
     if (!STATS[k] || !entries(p, k).some(e => !e.alt && (S.book === 'any' || e.base === S.book))) continue;
     for (const side of ['over', 'under']) {
       if (!sideOK(k, p.lines[k].line, side)) continue;
-      let c; try { c = chooseLine(p, k, side, S.book); } catch(e) { c = null; } if (!c) continue;
+      const L = p.lines[k], es = entries(p, k).filter(e => !e.alt && !e.mod && e.line === +L.line && (S.book === 'any' || e.base === S.book)); if (!es.length) continue;
+      let c = null; es.forEach(e => { const pr = priceOf(e, side); if (pr == null || !isFinite(pr)) return; if (!c || amToDec(pr) > amToDec(c.odds)) c = {odds: pr, book: e.book}; });
+      if (!c) continue; c.line = +L.line; c.apps = [...new Set(es.map(e => e.base))]; try { c.r = evalProp(p, k, c.line, side); } catch(e) { continue; }
       const r = c.r; if (r.L10.h + r.L10.m < 8 || c.odds < -250) continue;
-      const x = {p, k, line: c.line, side, odds: c.odds, book: true, bk: c.book, r, edge: r.prob - implied(c.odds), score: r.score};
+      const x = {p, k, line: c.line, side, odds: c.odds, book: true, bk: c.book, apps: c.apps, r, edge: r.prob - implied(c.odds), score: r.score};
       let fits = []; try { fits = fitsAll(x); } catch(e) {}
       const proven = fits.filter(f => f.proven), top = fits[0];
       const strat = proven.length ? Math.min(.04, .01*proven.length) : top && top.rec.n >= 50 && top.rec.roi > 0 ? .005 : 0;
@@ -3794,7 +3796,7 @@ function renderDailyPicks(){
       x.r.dfac && isFinite(x.r.dfac) && Math.abs(x.r.dfac - 1) >= .05 ? `<span class="dp-tag ${(x.side === 'over') === (x.r.dfac > 1) ? 'g' : 'r'}">${esc(x.p.next ? x.p.next.opp : '')} D ${x.r.dfac > 1 ? 'soft' : 'tough'}</span>` : '',
       x.r.oa && Math.abs(x.r.oa.adj) >= 1 ? '<span class="dp-tag b">Teammate out</span>' : ''].filter(Boolean).join('');
     return `<div class="dp"><div class="dp-h"><div><b>${esc(x.p.name)}</b> <span class="meta">${esc(x.p.team)}${x.p.next ? ` ${x.p.next.home ? 'vs' : '@'} ${esc(x.p.next.opp)}` : ''}</span>
-        <div class="dp-pick"><span class="${x.side === 'over' ? 'o' : 'u'}">${x.side === 'over' ? 'Over' : 'Under'}</span> ${x.line} ${esc(sw(x))} <span class="meta" style="font-size:13px">${fmtOdds(x.odds)}${x.bk ? ' ' + esc(bookName(x.bk)) : ''}</span></div></div>
+        <div class="dp-pick"><span class="${x.side === 'over' ? 'o' : 'u'}">${x.side === 'over' ? 'Over' : 'Under'}</span> ${x.line} ${esc(sw(x))} </div><div class="meta" style="font-size:12px">Standard line on ${esc((x.apps || []).map(b => BOOKN[b] || b).slice(0, 5).join(', '))}${x.odds && !DFS.has(baseBook(x.bk || '')) ? ` · best price ${fmtOdds(x.odds)} ${esc(bookName(x.bk))}` : ''}</div></div>
       <div class="dp-ai">${pct(o.fin)}<small>Prop Lab chance</small></div></div>
       <div class="dp-tags">${tags}</div>
       <div style="display:flex;gap:6px"><button class="add ${inS ? 'on' : ''}" data-dpadd="${i}">${inS ? 'In parlay' : '+ Add'}</button><button class="ghost" data-dpopen="${i}" style="width:auto;padding:4px 10px">Open player</button></div></div>`; };
