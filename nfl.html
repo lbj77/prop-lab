@@ -1491,6 +1491,7 @@ details.inj{margin-top:22px!important}
       <p class="sub" id="labSub">Every day, Prop Lab records each player’s main lean on every stat, notes which strategies flag it, and grades it once the box scores come in. Stick with whatever wins.</p>
       <div class="stratbar"><label class="f" for="stratSel" style="margin:0">Best bets use</label><select class="ghost" id="stratSel"></select><span class="meta" id="stratNote"></span></div>
       <div id="stratMatches"></div>
+      <div class="ctrl-row"><div class="seg" id="labLtSeg" aria-label="Line type"><button data-llt="std">Standard lines</button><button data-llt="g">Goblins</button><button data-llt="d">Demons</button></div></div>
       <div class="ctrl-row"><div class="seg" id="labPer"><button data-lp="7">Last 7 days</button><button data-lp="30">Last 30 days</button><button data-lp="0">All time</button></div><span class="meta" id="labInfo"></span></div>
       <div class="tbl-wrap"><table id="labTbl" class="res lab"></table></div>
       <div id="labLt"></div>
@@ -3777,9 +3778,14 @@ function renderLab(){
   const per = +(lsGet(LSP+'labPer') ?? 30);
   $$('#labPer button').forEach(b => b.setAttribute('aria-pressed', String(per) === b.dataset.lp));
   const today = ymd(new Date()), cut = per ? ymd(new Date(Date.now() - per*864e5)) : '';
-  const days = labDocs.filter(d => (!cut || d.date >= cut) && d.date <= today).sort((a,b) => a.date < b.date ? -1 : 1);
+  const days0 = labDocs.filter(d => (!cut || d.date >= cut) && d.date <= today).sort((a,b) => a.date < b.date ? -1 : 1);
+  // line type picked above the table: the whole Strategy lab (strategies, combos, confluence) switches to those picks
+  const llt = lsGet(LSP+'labLt') || 'std';
+  $$('#labLtSeg button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.llt === llt)));
+  const days = llt === 'std' ? days0 : days0.map(d => { const idx = (d.alt || []).map((row, i) => [row, i]).filter(([row]) => row.split('|')[14] === llt);
+    return Object.assign({}, d, {rows: idx.map(([row]) => row), res: idx.map(([, i]) => (d.altRes || '')[i] || '.').join(''), clv: null, alt: [], altRes: ''}); });
   LAB_BYNAME = null;
-  try { const lt = $('#labLt'); if (lt) { lt.innerHTML = labLineTypeTable(days); const fd = $('#labLtFold'); if (fd) fd.addEventListener('toggle', e => { S.ltOpen = e.target.open; }); } } catch(e) {}
+  try { const lt = $('#labLt'); if (lt) { lt.innerHTML = labLineTypeTable(days0); const fd = $('#labLtFold'); if (fd) fd.addEventListener('toggle', e => { S.ltOpen = e.target.open; }); } } catch(e) {}
   const stats = {}; LAB.forEach(st => stats[st.id] = {w:0, l:0, prof:0, g:newG()});
   let graded = 0;
   days.forEach(doc => doc.rows.forEach((row, i) => {
@@ -5328,6 +5334,7 @@ $('#labPanel').addEventListener('click', e => {
 $('#calPanel').addEventListener('click', e => { if (e.target.closest('[data-learn]')) { S.learnOn = S.learnOn === false; lsSet(LSP+'learnOn', S.learnOn); renderAll(); toast(S.learnOn ? 'Learning model on' : 'Learning model off'); return; } if (!e.target.closest('[data-calib]')) return; S.calibOn = S.calibOn === false; lsSet(LSP+'calibOn', S.calibOn); renderAll(); toast(S.calibOn ? 'Model correction on' : 'Model correction off'); });
 $('#comboAll').addEventListener('click', e => { const b = e.target.closest('[data-ca]'); if (!b) return; lsSet(LSP+'comboAll', b.dataset.ca === 'true'); renderLab(); });
 $('#comboMin').addEventListener('click', e => { const b = e.target.closest('[data-cm]'); if (!b) return; lsSet(LSP+'comboMin', +b.dataset.cm); renderLab(); });
+$('#labLtSeg').addEventListener('click', e => { const b = e.target.closest('[data-llt]'); if (!b) return; lsSet(LSP+'labLt', b.dataset.llt); renderLab(); });
 $('#labPer').addEventListener('click', e => { const b = e.target.closest('[data-lp]'); if (!b) return; lsSet(LSP+'labPer', +b.dataset.lp); renderLab(); });
 $('#pdfBtn').addEventListener('click', downloadBetsPdf);
 $('#resBtn').addEventListener('click', () => { const w = $('#resWrap'); w.hidden = !w.hidden; $('#resBtn').setAttribute('aria-expanded', !w.hidden); $('#resBtn').textContent = w.hidden ? 'Results table' : 'Hide results table'; if (!w.hidden) renderResultsTable(); });
