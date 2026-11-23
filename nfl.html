@@ -1161,8 +1161,9 @@ details.inj{margin-top:22px!important}
         <select class="ghost" id="pjGame" aria-label="Game"></select>
         <select class="ghost" id="pjStat" aria-label="Stat"></select>
         <select class="ghost" id="pjApp" aria-label="App"></select>
+        <select class="ghost" id="pjOdds" aria-label="Odds"><option value="">Any odds</option><option value="plus">Plus money (+100 or more)</option><option value="even">Near even (-120 to +120)</option><option value="fav">Favorites (-121 to -200)</option><option value="heavy">Heavy favorites (-201 or shorter)</option></select>
         <select class="ghost" id="pjMod" aria-label="Line type"><option value="">Any modifier</option><option value="std">Standard lines</option><option value="dn">Goblins (easier)</option><option value="up">Demons (harder)</option></select>
-        <div id="pjSortBox"><select class="ghost" id="pjSort" aria-label="Sort by"><option value="ai|-1">Sort: AI % (best first)</option><option value="l10|-1">Sort: L10 hit rate</option><option value="l5|-1">Sort: L5 hit rate</option><option value="l15|-1">Sort: L15 hit rate</option><option value="h2h|-1">Sort: H2H hit rate</option><option value="streak|-1">Sort: Streak</option><option value="diff|-1">Sort: Avg vs line</option><option value="line|-1">Sort: Line (high to low)</option><option value="name|1">Sort: Name (A to Z)</option></select></div>
+        <div id="pjSortBox"><select class="ghost" id="pjSort" aria-label="Sort by"><option value="ai|-1">Sort: AI % (best first)</option><option value="l10|-1">Sort: L10 hit rate</option><option value="l5|-1">Sort: L5 hit rate</option><option value="l15|-1">Sort: L15 hit rate</option><option value="h2h|-1">Sort: H2H hit rate</option><option value="streak|-1">Sort: Streak</option><option value="diff|-1">Sort: Avg vs line</option><option value="price|-1">Sort: Best price (biggest payout)</option><option value="line|-1">Sort: Line (high to low)</option><option value="name|1">Sort: Name (A to Z)</option></select></div>
       </div>
       <div class="pj-wrap"><table class="pjt" id="pjTbl"></table></div>
       <div id="pjCards"></div>
@@ -1492,6 +1493,7 @@ details.inj{margin-top:22px!important}
       <div id="stratMatches"></div>
       <div class="ctrl-row"><div class="seg" id="labPer"><button data-lp="7">Last 7 days</button><button data-lp="30">Last 30 days</button><button data-lp="0">All time</button></div><span class="meta" id="labInfo"></span></div>
       <div class="tbl-wrap"><table id="labTbl" class="res lab"></table></div>
+      <div id="labLt"></div>
       <details class="fold" style="margin-top:18px"><summary>More: best combinations and how many strategies agree</summary>
       <h3 class="sec-h" style="font-size:20px;margin-top:16px">Best combinations</h3>
       <p class="meta" style="margin:0 0 8px">Pairs and trios of strategies, counted only when they all flag the same prop. <b>By grade</b> splits each record by Prop Lab’s A–D grade, so you can see whether the A’s are carrying a strategy while the C’s drag it down. Tap Use to filter your picks by it.</p>
@@ -2246,8 +2248,8 @@ function renderShootX(p){
   el.innerHTML = html;
 }
 /* ---------- Projections tab: every line on the slate in one sortable table ---------- */
-S.pj = Object.assign({side:'over', q:'', game:'', stat:'', app:'', mod:'', sort:'l10', dir:-1, n:150}, lsGet(LSP+'pj') || {}, {q:'', n:150});
-const pjSave = () => lsSet(LSP+'pj', {side:S.pj.side, game:S.pj.game, stat:S.pj.stat, app:S.pj.app, mod:S.pj.mod, sort:S.pj.sort, dir:S.pj.dir});
+S.pj = Object.assign({side:'over', q:'', game:'', stat:'', app:'', mod:'', odds:'', sort:'l10', dir:-1, n:150}, lsGet(LSP+'pj') || {}, {q:'', n:150});
+const pjSave = () => lsSet(LSP+'pj', {side:S.pj.side, game:S.pj.game, stat:S.pj.stat, app:S.pj.app, mod:S.pj.mod, odds:S.pj.odds, sort:S.pj.sort, dir:S.pj.dir});
 let PJ = [];
 function pjRows(){
   const out = [], side = S.pj.side;
@@ -2266,8 +2268,9 @@ function pjRows(){
         let streak = 0; for (const v of vals) { if (!(side === 'over' ? v > line : v < line)) break; streak++; }
         const first = vals.length ? true : null;
         const a10 = mean(vals.slice(0, 10));
+        let price = null, priceBk = null; bks.forEach(e => { if (e.dfs && !e.alt) return; const pr = priceOf(e, side); if (pr != null && isFinite(pr) && pr !== 0 && (price == null || amToDec(pr) > amToDec(price))) { price = pr; priceBk = e.book; } });
         let ai = NaN, proj = NaN; try { const ev = evalProp(p, k, line, side, {minMin: S.minMin}); ai = ev.prob; proj = ev.proj; } catch(e) {}
-        out.push({p, k, line, mod, bks, a10, ai, proj, diff: side === 'over' ? a10 - line : line - a10, l5: hr(vals.slice(0, 5)), l10: hr(vals.slice(0, 10)), l15: hr(vals.slice(0, 15)), h2h: vs.length ? hr(vs) : NaN, h2hN: vs.length, streak: first === null ? NaN : streak});
+        out.push({p, k, line, mod, bks, a10, ai, proj, price, priceBk, diff: side === 'over' ? a10 - line : line - a10, l5: hr(vals.slice(0, 5)), l10: hr(vals.slice(0, 10)), l15: hr(vals.slice(0, 15)), h2h: vs.length ? hr(vs) : NaN, h2hN: vs.length, streak: first === null ? NaN : streak});
       });
     });
   });
@@ -2286,17 +2289,18 @@ function renderProj(){
   $('#pjStat').innerHTML = `<option value="">All stats</option>` + stats.map(k => `<option value="${esc(k)}" ${P.stat === k ? 'selected' : ''}>${esc(STATS[k].n)}</option>`).join('');
   const apps = [...new Set(PJ.flatMap(x => x.bks.map(e => e.base)))].sort((a, b) => BOOK_ORDER.indexOf(a) - BOOK_ORDER.indexOf(b));
   $('#pjApp').innerHTML = `<option value="">All apps</option>` + apps.map(b => `<option value="${esc(b)}" ${P.app === b ? 'selected' : ''}>${esc(BOOKN[b] || b)}</option>`).join('');
-  $('#pjMod').value = P.mod;
+  $('#pjMod').value = P.mod; $('#pjOdds').value = P.odds || '';
+  const oddsOK = x => { if (!P.odds) return true; const o = x.price; if (o == null) return false; return P.odds === 'plus' ? o >= 100 : P.odds === 'even' ? o >= -120 && o <= 120 : P.odds === 'fav' ? o <= -121 && o >= -200 : o <= -201; };
   const q = normName(P.q || '');
-  let rows = PJ.filter(x => (!P.stat || x.k === P.stat) && (!P.mod || x.mod === P.mod) && (!P.app || x.bks.some(e => e.base === P.app))
+  let rows = PJ.filter(x => oddsOK(x) && (!P.stat || x.k === P.stat) && (!P.mod || x.mod === P.mod) && (!P.app || x.bks.some(e => e.base === P.app))
     && (!P.game || (x.p.next && (P.game === (x.p.next.home ? `${x.p.next.opp}@${x.p.team}` : `${x.p.team}@${x.p.next.opp}`))))
     && (!q || normName(x.p.name).includes(q) || normName(x.p.team).includes(q) || (x.p.next && normName(x.p.next.opp).includes(q))));
   const key = P.sort, dir = P.dir;
-  rows.sort((a, b) => { const va = key === 'name' ? a.p.name : key === 'line' ? a.line : a[key], vb = key === 'name' ? b.p.name : key === 'line' ? b.line : b[key];
+  rows.sort((a, b) => { const pv = x => x.price == null ? NaN : amToDec(x.price), va = key === 'name' ? a.p.name : key === 'line' ? a.line : key === 'price' ? pv(a) : a[key], vb = key === 'name' ? b.p.name : key === 'line' ? b.line : key === 'price' ? pv(b) : b[key];
     if (key === 'name') return dir * String(va).localeCompare(String(vb));
     const na = isFinite(va) ? va : -1e9, nb = isFinite(vb) ? vb : -1e9; return dir * (na - nb) || (b.l10 || 0) - (a.l10 || 0); });
   $('#pjCount').textContent = `${rows.length} lines`;
-  const cols = [['name','Player','l'], ['line','Line'], [null,'App(s)'], ['ai','AI %'], ['a10','Avg L10'], ['diff','Diff'], ['l5','L5'], ['l10','L10'], ['l15','L15'], ['h2h','H2H'], ['streak','Streak']];
+  const cols = [['name','Player','l'], ['line','Line'], [null,'App(s)'], ['price','Best price'], ['ai','AI %'], ['a10','Avg L10'], ['diff','Diff'], ['l5','L5'], ['l10','L10'], ['l15','L15'], ['h2h','H2H'], ['streak','Streak']];
   const hc = v => !isFinite(v) ? 'hc-n' : v >= .7 ? 'hc-g3' : v > .5 ? 'hc-g2' : v === .5 ? 'hc-n' : v > .3 ? 'hc-r2' : 'hc-r3';
   const inSlip = x => S.slip.some(l => mine(l) && l.pid === x.p.id && l.stat === x.k && l.side === P.side && l.line === x.line);
   const shown = rows.slice(0, P.n);
@@ -2309,13 +2313,14 @@ function renderProj(){
         <td class="pl"><div class="who" data-pjopen="${i}">${esc(x.p.name)}${x.p.pos ? `<small>(${esc(x.p.pos)})</small>` : ''}</div><div class="sub2">${x.line} ${esc(STATS[x.k].n)} · ${esc(mu)}${x.p.status ? ` · <span class="neg">${esc(x.p.status)}</span>` : ''}</div></td>
         <td class="ln">${x.line}</td>
         <td><div class="apps">${logos}${x.mod !== 'std' ? `<span class="mod ${x.mod}">${x.bks[0].mod === 'goblin' ? 'Goblin' : x.bks[0].mod === 'demon' ? 'Demon' : x.mod === 'dn' ? '↓ easier' : '↑ harder'}</span>` : ''}</div></td>
+        <td class="ln" style="font-size:15px">${x.price != null ? `${fmtOdds(x.price)}<div class="sub2" style="font-size:11px">${esc(bookName(x.priceBk))}</div>` : '<span class="meta">pick\u2019em</span>'}</td>
         <td class="hc ${!isFinite(x.ai) ? 'hc-n' : x.ai >= .65 ? 'hc-g3' : x.ai > .55 ? 'hc-g2' : x.ai >= .45 ? 'hc-n' : x.ai >= .35 ? 'hc-r2' : 'hc-r3'}"><span title="Model projects ${isFinite(x.proj) ? f1(x.proj) : '?'}">${isFinite(x.ai) ? pct(x.ai) : '—'}</span></td>
         <td class="hc ${x.diff > 0 ? 'hc-g2' : x.diff < 0 ? 'hc-r2' : 'hc-n'}"><span>${f1(x.a10)}</span></td>
         <td class="hc ${x.diff >= 2 ? 'hc-g3' : x.diff > 0 ? 'hc-g2' : x.diff <= -2 ? 'hc-r3' : x.diff < 0 ? 'hc-r2' : 'hc-n'}"><span>${x.diff > 0 ? '+' : ''}${f1(x.diff)}</span></td>
         ${['l5','l10','l15'].map(c => `<td class="hc ${hc(x[c])}"><span>${isFinite(x[c]) ? pct(x[c]) : '—'}</span></td>`).join('')}
         <td class="hc ${hc(x.h2h)}"><span title="${x.h2hN} games vs ${n ? esc(n.opp) : ''}">${isFinite(x.h2h) ? pct(x.h2h) : 'N/A'}</span></td>
         <td class="hc ${!isFinite(x.streak) ? 'hc-n' : x.streak >= 5 ? 'hc-g3' : x.streak >= 3 ? 'hc-g2' : x.streak >= 1 ? 'hc-r2' : 'hc-r3'}"><span>${isFinite(x.streak) ? x.streak : '—'}</span></td></tr>`; }).join('') +
-    (shown.length ? '' : `<tr><td colspan="12" class="meta" style="padding:18px;text-align:center">No lines match. ${PJ.length ? 'Clear a filter.' : 'Lines show up after the morning run uploads.'}</td></tr>`) + '</tbody>';
+    (shown.length ? '' : `<tr><td colspan="13" class="meta" style="padding:18px;text-align:center">No lines match. ${PJ.length ? 'Clear a filter.' : 'Lines show up after the morning run uploads.'}</td></tr>`) + '</tbody>';
   // phones: the same rows as cards
   const heat = (cls, label, val) => `<div class="pjm ${cls}"><span><i>${label}</i>${val}</span></div>`;
   $('#pjCards').innerHTML = shown.length ? shown.map((x, i) => { const n = x.p.next, mu = n ? (n.home ? `vs ${n.opp}` : `@ ${n.opp}`) : '';
@@ -2325,7 +2330,7 @@ function renderProj(){
     const on = inSlip(x);
     return `<div class="pjc"><div class="pjc-top"><button class="pj-star ${on ? 'on' : ''}" data-pjstar="${i}" aria-label="Add to parlay">${on ? '★' : '☆'}</button>
       <div class="pjc-who" data-pjopen="${i}"><b>${esc(x.p.name)}${x.p.pos ? `<small>${esc(x.p.pos)}</small>` : ''}</b><div class="s">${esc(STATS[x.k].n)} · ${esc(x.p.team)} ${esc(mu)}${x.p.status ? ` · <span class="neg">${esc(x.p.status)}</span>` : ''}</div></div>
-      <div class="pjc-line"><div class="ln">${x.line}</div><div class="meta" style="font-size:11px">${P.side === 'over' ? 'Over' : 'Under'}</div></div></div>
+      <div class="pjc-line"><div class="ln">${x.line}</div><div class="meta" style="font-size:11px">${P.side === 'over' ? 'Over' : 'Under'}${x.price != null ? ` <b style="color:var(--ink)">${fmtOdds(x.price)}</b>` : ''}</div></div></div>
       <div class="pjc-grid">
         ${heat(!isFinite(x.ai) ? 'hc-n' : x.ai >= .65 ? 'hc-g3' : x.ai > .55 ? 'hc-g2' : x.ai >= .45 ? 'hc-n' : x.ai >= .35 ? 'hc-r2' : 'hc-r3', 'AI %', isFinite(x.ai) ? pct(x.ai) : '—')}
         ${heat(x.diff >= 2 ? 'hc-g3' : x.diff > 0 ? 'hc-g2' : x.diff <= -2 ? 'hc-r3' : x.diff < 0 ? 'hc-r2' : 'hc-n', 'AVG L10', f1(x.a10))}
@@ -3546,6 +3551,42 @@ function labRows(){
   }
   return byDate;
 }
+/* ---------- goblin / demon lines in the Strategy lab: recorded beside the main line, graded the same way ---------- */
+function labAltRows(){
+  const today = ymd(new Date()), byDate = {};
+  for (const p of S.players) {
+    if (!p.next || !p.next.date || p.next.date < today || isOut(p.id) || !p.lines) continue;
+    for (const k of Object.keys(p.lines)) {
+      if (!STATS[k]) continue;
+      const seen = new Set();
+      entries(p, k).filter(e => e.alt && (e.mod === 'goblin' || e.mod === 'demon')).forEach(e => {
+        const key = e.mod + e.line; if (seen.has(key)) return; seen.add(key);
+        const side = 'over', line = +e.line, odds = priceOf(e, side) ?? -110;
+        let r; try { r = evalProp(p, k, line, side); } catch(err) { return; }
+        const x = {p, k, line, side, odds, r, edge: r.prob - implied(odds), score: r.score, book: true};
+        let flags = ''; try { flags = LAB.filter(st => !st.t || st.t(x)).map(st => st.id).join(','); } catch(err) {}
+        (byDate[p.next.date] = byDate[p.next.date] || []).push([p.name, p.team, k, 'o', line, odds, flags, r.probRaw.toFixed(3), '', '', '', '', '', '', e.mod === 'goblin' ? 'g' : 'd'].join('|'));
+      });
+    }
+  }
+  return byDate;
+}
+// strategy record split by line type: standard (main line), goblin, demon
+function labLineTypeTable(days){
+  const t = {}; LAB.forEach(st => t[st.id] = {std:{w:0,l:0}, g:{w:0,l:0}, d:{w:0,l:0}});
+  const tally = (row, r, kind) => { if (r !== 'h' && r !== 'm') return; (row.split('|')[6] || '').split(',').forEach(id => { const o = t[id]; if (o) o[kind][r === 'h' ? 'w' : 'l']++; }); };
+  days.forEach(doc => {
+    (doc.rows || []).forEach((row, i) => tally(row, doc.res && doc.res[i], 'std'));
+    (doc.alt || []).forEach((row, i) => tally(row, doc.altRes && doc.altRes[i], row.split('|')[14] === 'g' ? 'g' : 'd'));
+  });
+  const anyAlt = days.some(d => (d.alt || []).length);
+  const cell = o => { const n = o.w + o.l; if (!n) return '<td class="r meta">—</td>'; const hp = o.w/n;
+    return `<td class="r"><b class="${n >= 20 ? (hp >= .58 ? 'pos' : hp < .5 ? 'neg' : '') : ''}">${pct(hp)}</b><div class="meta" style="font-size:11px">${o.w}–${o.l}${n < 20 ? ' · few' : ''}</div></td>`; };
+  const rows = LAB.filter(st => { const o = t[st.id]; return o.std.w + o.std.l + o.g.w + o.g.l + o.d.w + o.d.l > 0; });
+  return `<details class="fold" ${S.ltOpen ? 'open' : ''} id="labLtFold" style="margin-top:12px"><summary>By line type: standard vs goblin vs demon</summary>
+    <p class="meta" style="margin:8px 0">How often each strategy’s picks hit at the regular line, at PrizePicks goblin lines (easier, pays less) and at demon lines (harder, pays more). Goblins only pay off if they hit well above the lower payout bar; demons need a real edge. ${anyAlt ? '' : '<b>Goblin and demon lines started recording today</b>, so those columns fill in from the next graded day.'}</p>
+    <div class="tbl-wrap"><table class="res"><thead><tr><th>Strategy</th><th class="r">Standard</th><th class="r">Goblin</th><th class="r">Demon</th></tr></thead><tbody>${rows.map(st => `<tr><td>${esc(st.n)}</td>${cell(t[st.id].std)}${cell(t[st.id].g)}${cell(t[st.id].d)}</tr>`).join('')}</tbody></table></div></details>`;
+}
 // The owner's lab is also published to a shared spot, so everyone with the link sees the same strategy stats
 const LAB_PUBLIC = 'public/labmeta/days';
 const labShared = () => !viewerIsOwner && sharedDb;          // friends read the owner's results
@@ -3625,9 +3666,10 @@ async function labSync(){
     renderStratSel();
     // 1) record today's (and upcoming) leans, refreshing until the games start
     const gen = S.data.generated || S.importedAt || '';
+    const altBy = labAltRows();
     for (const [date, rows] of Object.entries(labRows())) {
-      const cur = labDocs.find(d => d.date === date);
-      if (rows.length && (!cur || (cur.gen !== gen && !(cur.res || '').replace(/\./g, '')))) await labSave(Object.assign({date, gen, rows, res: '.'.repeat(rows.length)}, cur && cur.clv ? {clv: cur.clv} : {}));
+      const cur = labDocs.find(d => d.date === date), alt = altBy[date] || [];
+      if (rows.length && (!cur || (cur.gen !== gen && !(cur.res || '').replace(/\./g, '')))) await labSave(Object.assign({date, gen, rows, res: '.'.repeat(rows.length), alt, altRes: '.'.repeat(alt.length)}, cur && cur.clv ? {clv: cur.clv} : {}));
     }
     // 2) grade any day the box scores now cover
     const latest = latestGame(), byName = {}; S.players.forEach(p => byName[normName(p.name)] = p);
@@ -3642,6 +3684,17 @@ async function labSync(){
         const v = statVal(g, k), ln = +line; return v === ln ? 'v' : (sd === 'o' ? v > ln : v < ln) ? 'h' : 'm';
       }).join('');
       if (res !== doc.res) await labSave(Object.assign({}, doc, {res}));
+    }
+    for (const doc of labDocs) {
+      if (!doc.alt || !doc.altRes || !doc.altRes.includes('.') || doc.date > latest) continue;
+      const altRes = doc.alt.map((row, i) => {
+        if (doc.altRes[i] !== '.') return doc.altRes[i];
+        const [name, team, k, sd, line] = row.split('|'); const p = byName[normName(name)]; if (!p || !STATS[k]) return 'v';
+        const g = p.games.find(g => g.d === doc.date);
+        if (!g) return (teamDays[team] && teamDays[team].has(doc.date)) || latest > doc.date ? 'v' : '.';
+        const v = statVal(g, k), ln = +line; return v === ln ? 'v' : (sd === 'o' ? v > ln : v < ln) ? 'h' : 'm';
+      }).join('');
+      if (altRes !== doc.altRes) await labSave(Object.assign({}, doc, {altRes}));
     }
     try { computeCalibration(); } catch(e){}
     if (S.tab === 'tracker') renderLab();
@@ -3686,13 +3739,22 @@ function gradeChips(g, sid){
 function renderCombos(days){
   const base = BASE_STRATS().map(st => st.id), combos = [];
   for (let i = 0; i < base.length; i++) for (let j = i+1; j < base.length; j++) { combos.push([base[i], base[j]]); for (let k = j+1; k < base.length; k++) combos.push([base[i], base[j], base[k]]); }
-  const agg = combos.map(c => ({c, w:0, l:0, prof:0, g:newG()})), conf = {};
+  const agg = combos.map(c => ({c, w:0, l:0, prof:0, g:newG(), lt:{g:{w:0,l:0}, d:{w:0,l:0}}})), conf = {};
+  const confO = key => conf[key] = conf[key] || {w:0, l:0, prof:0, g:newG(), lt:{g:{w:0,l:0}, d:{w:0,l:0}}};
   days.forEach(doc => doc.rows.forEach((row, i) => {
     const r = doc.res && doc.res[i]; if (r !== 'h' && r !== 'm') return;
     const parts = row.split('|'), fs = new Set(parts[6].split(',')), win = r === 'h', pl = win ? 10*(amToDec(+parts[5])-1) : -10, gr = rowGrade(doc, i);
     agg.forEach(a => { if (a.c.every(id => fs.has(id))) { win ? a.w++ : a.l++; a.prof += pl; if (a.g[gr]) win ? a.g[gr].w++ : a.g[gr].l++; } });
-    const n = base.filter(id => fs.has(id)).length, key = Math.min(n, 5); const o = conf[key] = conf[key] || {w:0, l:0, prof:0, g:newG()}; win ? o.w++ : o.l++; o.prof += pl; if (o.g[gr]) win ? o.g[gr].w++ : o.g[gr].l++;
+    const n = base.filter(id => fs.has(id)).length, key = Math.min(n, 5); const o = confO(key); win ? o.w++ : o.l++; o.prof += pl; if (o.g[gr]) win ? o.g[gr].w++ : o.g[gr].l++;
   }));
+  // goblin and demon lines: same strategy combinations, counted on their own
+  days.forEach(doc => (doc.alt || []).forEach((row, i) => {
+    const r = doc.altRes && doc.altRes[i]; if (r !== 'h' && r !== 'm') return;
+    const parts = row.split('|'), fs = new Set((parts[6] || '').split(',')), kind = parts[14] === 'g' ? 'g' : 'd', win = r === 'h';
+    agg.forEach(a => { if (a.c.every(id => fs.has(id))) a.lt[kind][win ? 'w' : 'l']++; });
+    const key = Math.min(base.filter(id => fs.has(id)).length, 5); confO(key).lt[kind][win ? 'w' : 'l']++;
+  }));
+  const ltCell = o => { const m = o.w + o.l; return `<td class="r">${m ? `<b class="${m >= 20 ? (o.w/m >= .58 ? 'pos' : o.w/m < .5 ? 'neg' : '') : ''}">${pct(o.w/m)}</b><div class="meta" style="font-size:11px">${o.w}\u2013${o.l}</div>` : '<span class="meta">\u2014</span>'}</td>`; };
   const MIN = +(lsGet(LSP+'comboMin') ?? 12), showAll = !!lsGet(LSP+'comboAll');
   $$('#comboMin button').forEach(b => b.setAttribute('aria-pressed', String(MIN) === b.dataset.cm));
   $$('#comboAll button').forEach(b => b.setAttribute('aria-pressed', String(showAll) === b.dataset.ca));
@@ -3701,10 +3763,10 @@ function renderCombos(days){
   $('#comboCount').textContent = ranked.length ? `${showAll ? 'All' : 'Top ' + top.length + ' of'} ${ranked.length} combinations with ${MIN}+ picks (out of ${combos.length} tested).` : '';
   const row = (name, o, act) => { const n = o.w + o.l, wp = n ? o.w/n : 0, roi = n ? o.prof/(10*n) : 0;
     return `<tr><td><b>${name}</b>${n < 30 ? '<div class="meta" style="font-size:11px">small sample</div>' : ''}</td><td class="r">${n}</td><td class="r">${o.w}\u2013${o.l}</td>
-      <td><div class="wbar"><i style="width:${(wp*100).toFixed(0)}%"></i><span>${n ? pct(wp) : '\u2014'}</span></div></td>
+      <td><div class="wbar"><i style="width:${(wp*100).toFixed(0)}%"></i><span>${n ? pct(wp) : '\u2014'}</span></div></td>${ltCell(o.lt.g)}${ltCell(o.lt.d)}
       <td class="r ${o.prof>=0?'pos':'neg'}"><b>${o.prof>=0?'+':''}${money(o.prof)}</b></td><td class="r ${roi>=0?'pos':'neg'}">${n ? `${roi>=0?'+':''}${(roi*100).toFixed(1)}%` : '\u2014'}</td>
       <td>${gradeChips(o.g, act)}</td><td>${act ? `<button class="add ${S.strat===act?'on':''}" data-usestrat="${esc(act)}">${S.strat===act?'In use':'Use'}</button>` : ''}</td></tr>`; };
-  const hd = `<thead><tr><th></th><th class="r">Picks</th><th class="r">W\u2013L</th><th>Win rate</th><th class="r">Profit ($10)</th><th class="r">Return</th><th>By grade</th><th></th></tr></thead>`;
+  const hd = `<thead><tr><th></th><th class="r">Picks</th><th class="r">W\u2013L</th><th>Win rate</th><th class="r">Goblin</th><th class="r">Demon</th><th class="r">Profit ($10)</th><th class="r">Return</th><th>By grade</th><th></th></tr></thead>`;
   $('#comboTbl').innerHTML = top.length ? hd + `<tbody>${top.map(a => row(a.c.map(stratName).map(esc).join(' + '), a, 'combo:' + a.c.join('+'))).join('')}</tbody>`
     : `<tbody><tr><td class="meta" style="padding:14px">No combinations have ${MIN}+ graded picks yet. Lower the minimum above to see more. They\u2019ll fill in as days are graded.</td></tr></tbody>`;
   const keys = Object.keys(conf).map(Number).sort((a,b) => a-b);
@@ -3717,6 +3779,7 @@ function renderLab(){
   const today = ymd(new Date()), cut = per ? ymd(new Date(Date.now() - per*864e5)) : '';
   const days = labDocs.filter(d => (!cut || d.date >= cut) && d.date <= today).sort((a,b) => a.date < b.date ? -1 : 1);
   LAB_BYNAME = null;
+  try { const lt = $('#labLt'); if (lt) { lt.innerHTML = labLineTypeTable(days); const fd = $('#labLtFold'); if (fd) fd.addEventListener('toggle', e => { S.ltOpen = e.target.open; }); } } catch(e) {}
   const stats = {}; LAB.forEach(st => stats[st.id] = {w:0, l:0, prof:0, g:newG()});
   let graded = 0;
   days.forEach(doc => doc.rows.forEach((row, i) => {
@@ -3986,9 +4049,11 @@ function catHtml(l, s){
 }
 function renderMyCats(){
   const box = $('#myCats'); if (!box) return;
-  const t = {}, add = (k, nm, win, use) => { const o = t[k] || (t[k] = {nm, w:0, l:0, use}); win ? o.w++ : o.l++; };
+  let curLt = 'std';
+  const t = {}, add = (k, nm, win, use) => { const o = t[k] || (t[k] = {nm, w:0, l:0, use, lt:{std:{w:0,l:0}, goblin:{w:0,l:0}, demon:{w:0,l:0}}}); win ? o.w++ : o.l++; const b = o.lt[curLt] || o.lt.std; win ? b.w++ : b.l++; };
   S.slips.forEach(s => { if (s.sample || !Array.isArray(s.legs)) return; s.legs.forEach((l, i) => {
     const r = s.results && s.results[i]; if (!r || (r.res !== 'hit' && r.res !== 'miss')) return; const win = r.res === 'hit';
+    curLt = l.ltype === 'goblin' || l.ltype === 'discount' || l.ltype === 'altlow' ? 'goblin' : l.ltype === 'demon' || l.ltype === 'althigh' ? 'demon' : 'std';
     const c = legCat(l, s);
     if (c && !c.none && !c.live) { if (c.against) add('against', 'Against the model’s lean', win); else if (!c.flags.length) add('nofl', 'Model lean, no strategy', win); else c.flags.forEach(f => add('s:' + f, catName(f), win, f)); }
     if (l.ltype) add('t:' + l.ltype, ltypeOf(l.ltype)[1], win);
@@ -3997,10 +4062,10 @@ function renderMyCats(){
   const rows = Object.values(t).filter(o => o.w + o.l >= 1).sort((a,b) => (b.w + b.l >= 10) - (a.w + a.l >= 10) || b.w/(b.w + b.l) - a.w/(a.w + a.l));
   if (!rows.length) { box.innerHTML = ''; return; }
   const tot = rows.reduce((m, o) => Math.max(m, o.w + o.l), 0);
-  box.innerHTML = `<details class="fold" ${S.myCatsOpen ? 'open' : ''}><summary>What wins for you (${SPORT.toUpperCase()} picks you bet)</summary>
+  box.innerHTML = `<details class="fold" ${S.myCatsOpen ? 'open' : ''}><summary>What wins for you (${SPORT.toUpperCase()} picks you bet, split by standard / goblin / demon)</summary>
     <p class="meta" style="margin:8px 0">Every graded pick you saved, matched to the strategies that flagged it that day. Under 10 picks is too few to trust; 30+ starts to mean something.</p>
-    <div class="tbl-wrap"><table class="res"><thead><tr><th>Category</th><th class="r">W–L</th><th class="r">Hit</th><th></th></tr></thead><tbody>${rows.map(o => { const n = o.w + o.l, hp = o.w/n;
-      return `<tr><td>${esc(o.nm)}${n < 10 ? '<div class="meta" style="font-size:11px">small sample</div>' : ''}</td><td class="r">${o.w}–${o.l}</td><td class="r ${hp >= .6 ? 'pos' : hp < .5 ? 'neg' : ''}"><b>${pct(hp)}</b></td><td>${o.use ? `<button class="add" data-mystrat="${esc(o.use)}">Use for Best bets</button>` : ''}</td></tr>`; }).join('')}</tbody></table></div></details>`;
+    <div class="tbl-wrap"><table class="res"><thead><tr><th>Category</th><th class="r">W–L</th><th class="r">Hit</th><th class="r">Standard</th><th class="r">Goblin</th><th class="r">Demon</th><th></th></tr></thead><tbody>${rows.map(o => { const n = o.w + o.l, hp = o.w/n;
+      return `<tr><td>${esc(o.nm)}${n < 10 ? '<div class="meta" style="font-size:11px">small sample</div>' : ''}</td><td class="r">${o.w}–${o.l}</td><td class="r ${hp >= .6 ? 'pos' : hp < .5 ? 'neg' : ''}"><b>${pct(hp)}</b></td>${['std','goblin','demon'].map(k => { const b = o.lt[k], m = b.w + b.l; return `<td class="r">${m ? `<b class="${b.w/m >= .6 ? 'pos' : b.w/m < .5 ? 'neg' : ''}">${pct(b.w/m)}</b><div class="meta" style="font-size:11px">${b.w}–${b.l}</div>` : '<span class="meta">—</span>'}</td>`; }).join('')}<td>${o.use ? `<button class="add" data-mystrat="${esc(o.use)}">Use for Best bets</button>` : ''}</td></tr>`; }).join('')}</tbody></table></div></details>`;
 }
 /* ---------- closing line value: did the sharp market move toward our pick before the game? ---------- */
 let CLVSD = {};
@@ -5131,7 +5196,7 @@ $('#winSeg').addEventListener('click', e => { const b = e.target.closest('button
 $('#oppSel').addEventListener('change', e => { S.opp = e.target.value; renderAnalyzer(); });
 $('#pjSide').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; S.pj.side = b.dataset.v; pjSave(); renderProj(); });
 $('#pjQ').addEventListener('input', e => { S.pj.q = e.target.value; S.pj.n = 150; renderProj(); });
-[['pjGame','game'], ['pjStat','stat'], ['pjApp','app'], ['pjMod','mod']].forEach(([id, k]) => $('#' + id).addEventListener('change', e => { S.pj[k] = e.target.value; S.pj.n = 150; pjSave(); renderProj(); }));
+[['pjGame','game'], ['pjStat','stat'], ['pjApp','app'], ['pjMod','mod'], ['pjOdds','odds']].forEach(([id, k]) => $('#' + id).addEventListener('change', e => { S.pj[k] = e.target.value; S.pj.n = 150; pjSave(); renderProj(); }));
 $('#pjSort').addEventListener('change', e => { const [k, d] = e.target.value.split('|'); S.pj.sort = k; S.pj.dir = +d; pjSave(); renderProj(); });
 $('#view-proj').addEventListener('click', e => {
   const h = e.target.closest('[data-pjs]'); if (h) { const k = h.dataset.pjs; if (S.pj.sort === k) S.pj.dir = -S.pj.dir; else { S.pj.sort = k; S.pj.dir = k === 'name' ? 1 : -1; } pjSave(); renderProj(); return; }
