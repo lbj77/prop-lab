@@ -1495,6 +1495,7 @@ details.inj{margin-top:22px!important}
       <div class="ctrl-row"><div class="seg" id="labPer"><button data-lp="7">Last 7 days</button><button data-lp="30">Last 30 days</button><button data-lp="0">All time</button></div><span class="meta" id="labInfo"></span></div>
       <div class="tbl-wrap"><table id="labTbl" class="res lab"></table></div>
       <div id="labLt"></div>
+      <div id="schedBox"></div>
       <details class="fold" style="margin-top:18px"><summary>More: best combinations and how many strategies agree</summary>
       <h3 class="sec-h" style="font-size:20px;margin-top:16px">Best combinations</h3>
       <p class="meta" style="margin:0 0 8px">Pairs and trios of strategies, counted only when they all flag the same prop. <b>By grade</b> splits each record by Prop Lab’s A–D grade, so you can see whether the A’s are carrying a strategy while the C’s drag it down. Tap Use to filter your picks by it.</p>
@@ -1854,7 +1855,9 @@ function validate(d){
                 .sort((a,b) => a.d < b.d ? 1 : -1)
   })).filter(p => p.games.length);
   if (!players.length) throw new Error('No players with game logs in that file.');
-  return {generated:d.generated||null, season:d.season||'', sample:!!d.sample, diag: d.diag && typeof d.diag === 'object' ? d.diag : null, players};
+  // keep the extra blocks the scripts send (shot zones, play types) or the Shooting tab has nothing to show
+  return {generated:d.generated||null, season:d.season||'', sample:!!d.sample, diag: d.diag && typeof d.diag === 'object' ? d.diag : null, players,
+    ...(d.zones && typeof d.zones === 'object' ? {zones: d.zones} : {}), ...(d.playtypes && typeof d.playtypes === 'object' ? {playtypes: d.playtypes} : {})};
 }
 function setData(d, source, importedAt){
   S.data = d; S.source = source; S.importedAt = importedAt || null;
@@ -3477,7 +3480,13 @@ const LAB = [
   {id:'score', n:'Hit score 75+', d:'Prop Lab\u2019s blended score of 75 or more', t: x => hitScore(x) >= .75},
   {id:'boost', n:'Teammate out', d:'A teammate is out and he gets the bump', t: x => x.r.oa && (x.side === 'over' ? x.r.oa.adj >= 1 : x.r.oa.adj <= -1)},
   {id:'l10def',n:'Last 10 + soft defense', d:'Hit 8+ of 10 and a soft matchup', t: x => LAB_T('l10')(x) && LAB_T('def')(x)},
-  {id:'scedge',n:'Hit score 75+ and edge 5%+', d:'Both together', t: x => LAB_T('score')(x) && LAB_T('edge')(x)}
+  {id:'scedge',n:'Hit score 75+ and edge 5%+', d:'Both together', t: x => LAB_T('score')(x) && LAB_T('edge')(x)},
+  {id:'rested',n:'Rested, over', d:'2+ days off before this game, betting the over', t: x => { const f = schedNext(x.p); return !!f && f.rest >= 3 && x.side === 'over'; }},
+  {id:'b2bu',  n:'Back-to-back, under', d:'Second night of a back-to-back, betting the under', t: x => { const f = schedNext(x.p); return !!f && f.rest === 1 && x.side === 'under'; }},
+  {id:'roadu', n:'Long road trip, under', d:'4th straight road game or later, betting the under', t: x => { const f = schedNext(x.p); return !!f && f.road >= 4 && x.side === 'under'; }},
+  {id:'eastu', n:'Flew east, under', d:'Moved 2+ time zones east since his last game, betting the under', t: x => { const f = schedNext(x.p); return !!f && f.tz != null && f.tz >= 2 && x.side === 'under'; }},
+  {id:'busyu', n:'Busy stretch, under', d:'4th game in 7 days, betting the under', t: x => { const f = schedNext(x.p); return !!f && f.g7 >= 4 && x.side === 'under'; }},
+  {id:'homer', n:'Home and rested, over', d:'At home with 2+ days off, betting the over', t: x => { const f = schedNext(x.p); return !!f && f.home && f.rest >= 3 && x.side === 'over'; }}
 ];
 const LAB_T = id => (LAB.find(s => s.id === id) || {}).t || (() => true);
 let labDocs = [];
@@ -3492,7 +3501,8 @@ function labStats(extra = []){
   }));
   return o;
 }
-const BASE_STRATS = () => LAB.filter(st => st.t && !['l10def','scedge'].includes(st.id));
+const SCHED_IDS = ['rested','b2bu','roadu','eastu','busyu','homer'];
+const BASE_STRATS = () => LAB.filter(st => st.t && !['l10def','scedge'].includes(st.id) && !SCHED_IDS.includes(st.id));
 const stratName = id => (LAB.find(st => st.id === id) || {n:id}).n;
 // 'combo:l10+def' = every listed strategy agrees; 'conf:3' = at least 3 strategies agree
 function stratById(id){
@@ -3587,6 +3597,72 @@ function labLineTypeTable(days){
   return `<details class="fold" ${S.ltOpen ? 'open' : ''} id="labLtFold" style="margin-top:12px"><summary>By line type: standard vs goblin vs demon</summary>
     <p class="meta" style="margin:8px 0">How often each strategy’s picks hit at the regular line, at PrizePicks goblin lines (easier, pays less) and at demon lines (harder, pays more). Goblins only pay off if they hit well above the lower payout bar; demons need a real edge. ${anyAlt ? '' : '<b>Goblin and demon lines started recording today</b>, so those columns fill in from the next graded day.'}</p>
     <div class="tbl-wrap"><table class="res"><thead><tr><th>Strategy</th><th class="r">Standard</th><th class="r">Goblin</th><th class="r">Demon</th></tr></thead><tbody>${rows.map(st => `<tr><td>${esc(st.n)}</td>${cell(t[st.id].std)}${cell(t[st.id].g)}${cell(t[st.id].d)}</tr>`).join('')}</tbody></table></div></details>`;
+}
+/* ---------- schedule & travel: rest, road trips, time zones, busy stretches ---------- */
+const TZ = (() => { const m = {}, set = (z, s) => s.split(' ').forEach(t => { if (!(t in m)) m[t] = z; });
+  if (SPORT === 'nba') { set(-5, 'ATL BOS BKN CHA CLE DET IND MIA NYK ORL PHI TOR WAS'); set(-6, 'CHI DAL HOU MEM MIL MIN NOP OKC SAS'); set(-7, 'DEN UTA PHX'); set(-8, 'GSW LAC LAL POR SAC'); }
+  if (SPORT === 'nhl') { set(-5, 'BOS BUF CAR CBJ DET FLA MTL NJD NJ NYI NYR OTT PHI PIT TBL TB TOR WSH'); set(-6, 'CHI DAL MIN NSH STL WPG'); set(-7, 'COL CGY EDM UTA ARI'); set(-8, 'ANA LAK LA SJS SJ SEA VAN VGK'); }
+  if (SPORT === 'nfl') { set(-5, 'ATL BAL BUF CAR CIN CLE DET IND JAX MIA NE NYG NYJ PHI PIT TB WAS WSH'); set(-6, 'CHI DAL GB HOU KC MIN NO TEN'); set(-7, 'DEN ARI'); set(-8, 'LV LAC LAR LA SF SEA'); }
+  if (SPORT === 'mlb') { set(-5, 'ATL BAL BOS CIN CLE DET MIA NYM NYY PHI PIT TB TOR WSH'); set(-6, 'CHC CWS HOU KC MIL MIN STL TEX'); set(-7, 'COL AZ ARI'); set(-8, 'LAA LAD OAK ATH SD SF SEA'); }
+  return m; })();
+const venueOf = (g, p) => g.h ? (g.tm || p.team) : g.opp;
+// schedule facts for each game in a list (newest first, like p.games): rest days, road-trip game #, time zones moved east (+) or west (-), games in the last 7 days
+function schedOf(games, p){
+  const asc = [...games].sort((a, b) => a.d < b.d ? -1 : 1), out = new Map();
+  asc.forEach((g, i) => { const prev = asc[i - 1];
+    const rest = prev ? dayDiff(g.d, prev.d) : null;
+    let road = 0; if (!g.h) { road = 1; for (let j = i - 1; j >= 0 && !asc[j].h && dayDiff(asc[j + 1].d, asc[j].d) <= 4; j--) road++; }
+    const a = TZ[venueOf(g, p)], b = prev ? TZ[venueOf(prev, p)] : undefined, tz = a != null && b != null ? a - b : null;
+    let g7 = 0; for (let j = i; j >= 0 && dayDiff(g.d, asc[j].d) <= 6; j--) g7++;
+    out.set(g, {rest, road, tz, g7, home: !!g.h}); });
+  return out;
+}
+// the same facts for his next game
+function schedNext(p){
+  const n = p.next; if (!n || !n.date || !p.games.length) return null;
+  const last = p.games[0], rest = dayDiff(n.date, last.d); if (!(rest > 0 && rest < 30)) return null;
+  const nextG = {d: n.date, h: !!n.home, opp: n.opp, tm: p.team}, sch = schedOf([nextG, ...p.games.slice(0, 12)], p);
+  return sch.get(nextG);
+}
+// what the schedule has actually done to players' numbers (all games on file), vs each player's own season average
+let SCHED = {key: '', v: null};
+function schedEffects(){
+  const key = ((S.data && S.data.generated) || '') + S.players.length;
+  if (SCHED.key === key) return SCHED.v;
+  const stats = (NBA ? ['PTS','REB','AST','PRA'] : CFG.main.slice(0, 4)).filter(k => STATS[k]);
+  const B = {}, add = (grp, lab, ord, g, avg, p) => { const o = B[grp + '|' + lab] || (B[grp + '|' + lab] = {grp, lab, ord, n: 0, s: {}, over: {}, min: 0, minN: 0});
+    o.n++; stats.forEach(k => { const m = avg[k]; if (!(m >= 1)) return; const v = statVal(g, k); (o.s[k] = o.s[k] || []).push(v/m - 1); (o.over[k] = o.over[k] || [0, 0])[v > m ? 0 : 1]++; });
+    if (SHOWMIN && avg.min >= 10 && +g.min > 0) { o.min += g.min/avg.min - 1; o.minN++; } };
+  S.players.forEach(p => {
+    if (!p.games || p.games.length < 8) return;
+    const bySea = {}; p.games.forEach(g => (bySea[seasonOf(g.d)] = bySea[seasonOf(g.d)] || []).push(g));
+    Object.values(bySea).forEach(gs => {
+      if (gs.length < 8) return;
+      const avg = {}; stats.forEach(k => avg[k] = mean(gs.map(g => statVal(g, k)))); if (SHOWMIN) avg.min = mean(gs.map(g => +g.min || 0));
+      const sch = schedOf(gs, p);
+      gs.forEach(g => { const f = sch.get(g); if (!f || f.rest == null) return;
+        add('Rest', f.rest === 1 ? 'Back-to-back' : f.rest === 2 ? '1 day off' : f.rest === 3 ? '2 days off' : '3+ days off', Math.min(f.rest, 4), g, avg, p);
+        add('Home / road trip', f.home ? 'Home' : f.road >= 4 ? 'Road game 4+' : `Road game ${f.road}`, f.home ? 0 : Math.min(f.road, 4), g, avg, p);
+        if (f.tz != null) add('Travel', f.tz >= 2 ? 'Flew 2+ zones east' : f.tz === 1 ? '1 zone east' : f.tz === 0 ? 'Same time zone' : f.tz === -1 ? '1 zone west' : 'Flew 2+ zones west', -f.tz, g, avg, p);
+        add('Busy stretch', f.g7 >= 4 ? '4+ games in 7 days' : f.g7 === 3 ? '3 games in 7 days' : '1–2 games in 7 days', f.g7, g, avg, p);
+      });
+    });
+  });
+  SCHED = {key, v: {stats, rows: Object.values(B).sort((a, b) => a.grp < b.grp ? -1 : a.grp > b.grp ? 1 : a.ord - b.ord)}};
+  return SCHED.v;
+}
+function renderSched(){
+  const box = $('#schedBox'); if (!box) return;
+  const E = schedEffects(); if (!E.rows.length) { box.innerHTML = ''; return; }
+  const cell = arr => { if (!arr || arr.length < 30) return '<td class="r meta">—</td>'; const v = mean(arr)*100; return `<td class="r ${v >= 2 ? 'pos' : v <= -2 ? 'neg' : ''}"><b>${v >= 0 ? '+' : ''}${v.toFixed(1)}%</b></td>`; };
+  const ovr = o => { const t = o.over[E.stats[0]]; if (!t || t[0] + t[1] < 30) return '<td class="r meta">—</td>'; const h = t[0]/(t[0] + t[1]); return `<td class="r">${pct(h)}</td>`; };
+  let lastG = '';
+  box.innerHTML = `<details class="fold" ${S.schedOpen ? 'open' : ''} id="schedFold" style="margin-top:12px"><summary>Schedule &amp; travel: rest, road trips, time zones</summary>
+    <p class="meta" style="margin:8px 0">Every game on file, compared to each player’s own season average. +5% means players put up 5% more than usual in that spot. Under 30 games shows —. Use it to see which spots really matter, then watch the matching strategies (Rested, Back-to-back, Long road trip, Flew east, Busy stretch) in the table above as they build a record.</p>
+    <div class="tbl-wrap"><table class="res"><thead><tr><th>Spot</th><th class="r">Games</th>${E.stats.map(k => `<th class="r">${esc(k)}</th>`).join('')}${SHOWMIN ? '<th class="r">Min</th>' : ''}<th class="r">Beat avg (${esc(E.stats[0])})</th></tr></thead><tbody>${E.rows.map(o => {
+      const head = o.grp !== lastG ? `<tr><td colspan="${E.stats.length + 4}" style="padding-top:12px"><b>${esc(o.grp)}</b></td></tr>` : ''; lastG = o.grp;
+      return head + `<tr><td>${esc(o.lab)}</td><td class="r meta">${o.n}</td>${E.stats.map(k => cell(o.s[k])).join('')}${SHOWMIN ? (o.minN >= 30 ? `<td class="r ${o.min/o.minN*100 >= 2 ? 'pos' : o.min/o.minN*100 <= -2 ? 'neg' : ''}">${o.min/o.minN >= 0 ? '+' : ''}${(o.min/o.minN*100).toFixed(1)}%</td>` : '<td class="r meta">—</td>') : ''}${ovr(o)}</tr>`; }).join('')}</tbody></table></div></details>`;
+  const fd = $('#schedFold'); if (fd) fd.addEventListener('toggle', e => { S.schedOpen = e.target.open; });
 }
 // The owner's lab is also published to a shared spot, so everyone with the link sees the same strategy stats
 const LAB_PUBLIC = 'public/labmeta/days';
@@ -3785,6 +3861,7 @@ function renderLab(){
   const days = llt === 'std' ? days0 : days0.map(d => { const idx = (d.alt || []).map((row, i) => [row, i]).filter(([row]) => row.split('|')[14] === llt);
     return Object.assign({}, d, {rows: idx.map(([row]) => row), res: idx.map(([, i]) => (d.altRes || '')[i] || '.').join(''), clv: null, alt: [], altRes: ''}); });
   LAB_BYNAME = null;
+  try { renderSched(); } catch(e) {}
   try { const lt = $('#labLt'); if (lt) { lt.innerHTML = labLineTypeTable(days0); const fd = $('#labLtFold'); if (fd) fd.addEventListener('toggle', e => { S.ltOpen = e.target.open; }); } } catch(e) {}
   const stats = {}; LAB.forEach(st => stats[st.id] = {w:0, l:0, prof:0, g:newG()});
   let graded = 0;
