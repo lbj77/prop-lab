@@ -866,6 +866,16 @@ main{padding-bottom:90px}
 .dp-slip b{font-size:14.5px}
 .sch-box{margin-top:12px;padding:10px;border-radius:12px;background:var(--panel2)}
 .sch-box .pf-pill{margin-top:4px}
+.pf-ct{grid-template-columns:repeat(6,minmax(0,1fr))!important}
+@media(max-width:560px){.pf-ct{grid-template-columns:repeat(3,minmax(0,1fr))!important}}
+.ss-t td,.ss-t th{white-space:nowrap}
+.ss-t tr.tn td{background:rgba(61,220,255,.10)}
+.ss-t tr.tn td:first-child{box-shadow:inset 3px 0 0 var(--ball)}
+.ss-t .sv{font-weight:800}
+.ss-t .sd{display:block;font-size:10.5px;font-weight:700}
+.ss-wrap{overflow-x:auto;max-width:100%}
+.pf>*,.pf-r>*,.pf-body{min-width:0}
+@media(max-width:560px){.ss-t td,.ss-t th{padding:7px 5px;font-size:13px}.ss-t td:first-child{white-space:normal;min-width:120px}}
 .sc-fix{margin-top:10px;padding:12px;border-radius:12px;background:var(--over-soft);font-size:16px;line-height:1.45}
 
 .an-chart{margin:14px 0 6px;padding-top:14px;border-top:1px solid var(--line)}
@@ -1278,13 +1288,13 @@ details.inj{margin-top:22px!important}
         <div class="pf-rt" id="pfTop"><button data-pt="move" aria-pressed="true">↗ Line Movement</button><button data-pt="hist" aria-pressed="false">⟲ Prop History</button></div>
         <div class="pf-body" id="pfTopBody"></div>
       </div>
-      <div class="pf-ct" id="pfCt"><button data-pc="matchup" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0z"/><path d="M17 5h3v2a3 3 0 0 1-3 3M7 5H4v2a3 3 0 0 0 3 3"/></svg>Matchup</button><button data-pc="defense" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/></svg>Defense</button><button data-pc="shooting" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.5"/></svg>Shooting</button><button data-pc="similar" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7M18 14a6 6 0 0 1 3.5 6"/></svg>Similar</button><button data-pc="injuries" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/><path d="M8 12h2l1-2 2 4 1-2h2"/></svg>Injuries</button></div>
+      <div class="pf-ct" id="pfCt"><button data-pc="matchup" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0z"/><path d="M17 5h3v2a3 3 0 0 1-3 3M7 5H4v2a3 3 0 0 0 3 3"/></svg>Matchup</button><button data-pc="defense" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/></svg>Defense</button><button data-pc="shooting" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.5"/></svg>Shooting</button><button data-pc="similar" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7M18 14a6 6 0 0 1 3.5 6"/></svg>Similar</button><button data-pc="schedule" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4M8 14h2M14 14h2M8 18h2"/></svg>Schedule</button><button data-pc="injuries" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/><path d="M8 12h2l1-2 2 4 1-2h2"/></svg>Injuries</button></div>
       <div class="panel pf-card"><div class="pf-body" id="pfCtBody">
         <div id="pfC-matchup"></div><div id="pfC-defense" hidden></div><div id="pfC-shooting" hidden><p class="meta" id="zoneNA">Shot zones are NBA only.</p><div class="nba-only" id="zonePanel">
       <div class="bd-hd"><h2 style="margin:0">Shooting zones</h2><div class="seg" id="zoneMode"><button data-zm="match">Matchup</button><button data-zm="player">Player</button><button data-zm="def">Opp defense</button></div></div>
       <p class="sub" id="zoneSub" style="margin-top:6px"></p>
       <div id="zoneBody"></div>
-    </div><div id="shootX" class="nba-only"></div></div><div id="pfC-similar" hidden></div>
+    </div><div id="shootX" class="nba-only"></div></div><div id="pfC-schedule" hidden></div><div id="pfC-similar" hidden></div>
         <div id="pfC-injuries" hidden><div id="anInj"></div><div id="pfC-injList"></div></div>
       </div></div>
     </div>
@@ -2470,7 +2480,7 @@ function dvp(grp, season){
 }
 function renderPfCt(p){
   $$('#pfCt button').forEach(b => b.setAttribute('aria-pressed', b.dataset.pc === S.pfTab));
-  ['matchup','defense','shooting','similar','injuries'].forEach(k => { const el = $('#pfC-' + k); if (el) el.hidden = k !== S.pfTab; });
+  ['matchup','defense','shooting','schedule','similar','injuries'].forEach(k => { const el = $('#pfC-' + k); if (el) el.hidden = k !== S.pfTab; });
   const opp = p.next && p.next.opp, grp = S.simPos || posGrp(p), sideTxt = S.side === 'over' ? 'Over' : 'Under';
   const posSel = id => Object.keys(POSNM).length ? `<select class="ghost" id="${id}" style="width:auto">${Object.entries(POSNM).map(([k, n]) => `<option value="${k}" ${k === grp ? 'selected' : ''}>${n}</option>`).join('')}</select>` : '';
   if (S.pfTab === 'matchup') {
@@ -2496,6 +2506,7 @@ function renderPfCt(p){
       <p class="meta" style="font-size:12px;margin:8px 0 0">What ${esc(POSNM[grp] || 'players at his position')} put up against ${esc(opp)} per game, from the players in your file. 1st = allows the least (toughest), ${ordn(D.n)} = allows the most (softest).</p>`}`;
   }
   if (S.pfTab === 'shooting') renderShootX(p);
+  if (S.pfTab === 'schedule') { try { $('#pfC-schedule').innerHTML = schedSplitsHtml(p); } catch(e) { $('#pfC-schedule').innerHTML = '<p class="meta">Couldn\u2019t build the schedule splits.</p>'; } }
   if (S.pfTab === 'similar') {
     const lab = labIndex(); let cs = curSeason();
     if (opp && !S.players.some(q => q.id !== p.id && posGrp(q) === grp && q.games.some(g => g.opp === opp && seasonOf(g.d) === cs))) cs--;
@@ -3787,6 +3798,59 @@ function schedPlayerHtml(p){
       f.tz != null && f.tz !== 0 ? `<span class="pf-pill ${f.tz >= 2 ? 'r' : 'n'}">${Math.abs(f.tz)} zone${Math.abs(f.tz) > 1 ? 's' : ''} ${f.tz > 0 ? 'east' : 'west'}</span>` : '',
       `<span class="pf-pill ${f.g7 >= 4 ? 'r' : 'n'}">${f.g7} games in 7 days</span>`].join('')}</div>
     <table class="pft" style="margin-top:8px"><thead><tr><th>His games in these spots</th><th class="r">G</th><th class="r">Avg ${esc(S.stat)}</th><th class="r">vs usual</th><th class="r">${S.side === 'over' ? 'Over' : 'Under'} ${S.line}</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+/* ---------- Player tab > Schedule: how THIS player does in every rest / travel / road-trip spot ---------- */
+function schedSplitsHtml(p){
+  if (!p || !p.games || !p.games.length) return '<p class="meta">No games on file.</p>';
+  const asc = [...p.games].sort((a, b) => a.d < b.d ? -1 : 1), F = schedOf(p.games, p);
+  // last game of a road trip: an away game followed by a home game (or a long break)
+  const endTrip = new Set(); asc.forEach((g, i) => { const nx = asc[i + 1]; if (!g.h && (!nx || nx.h || dayDiff(nx.d, g.d) > 4)) endTrip.add(g); });
+  const bySea = {}; p.games.forEach(g => (bySea[seasonOf(g.d)] = bySea[seasonOf(g.d)] || []).push(g));
+  const cols = (NBA ? ['PTS','REB','AST','3PM','PRA'] : CFG.main.slice(0, 5)).filter(k => STATS[k]);
+  if (!cols.includes(S.stat) && STATS[S.stat]) cols.unshift(S.stat);
+  const avg = {}; Object.entries(bySea).forEach(([y, gs]) => { avg[y] = {}; cols.forEach(k => avg[y][k] = mean(gs.map(g => statVal(g, k)))); avg[y].min = SHOWMIN ? mean(gs.map(g => +g.min || 0)) : 0; });
+  const tn = schedNext(p);
+  const SP = [
+    ['All games', f => true, null],
+    ['Back-to-back', f => f.rest === 1, t => t.rest === 1],
+    ['1 day off', f => f.rest === 2, t => t.rest === 2],
+    ['2 days off', f => f.rest === 3, t => t.rest === 3],
+    ['3+ days off', f => f.rest >= 4, t => t.rest >= 4],
+    ['Home', f => f.home, t => t.home],
+    ['Road', f => !f.home, t => !t.home],
+    ['Road game 1', f => !f.home && f.road === 1, t => !t.home && t.road === 1],
+    ['Road game 2', f => !f.home && f.road === 2, t => !t.home && t.road === 2],
+    ['Road game 3', f => !f.home && f.road === 3, t => !t.home && t.road === 3],
+    ['Road game 4+', f => !f.home && f.road >= 4, t => !t.home && t.road >= 4],
+    ['Last game of a road trip', (f, g) => endTrip.has(g), null],
+    ['3 games in 7 days', f => f.g7 === 3, t => t.g7 === 3],
+    ['4+ games in 7 days', f => f.g7 >= 4, t => t.g7 >= 4],
+    ['Flew 2+ zones east', f => f.tz != null && f.tz >= 2, t => t.tz != null && t.tz >= 2],
+    ['Flew 2+ zones west', f => f.tz != null && f.tz <= -2, t => t.tz != null && t.tz <= -2],
+    ['Same time zone', f => f.tz === 0, t => t.tz === 0],
+    ['Back-to-back + 4th game in 7 days', f => f.rest === 1 && f.g7 >= 4, t => t.rest === 1 && t.g7 >= 4],
+    ['Back-to-back on the road', f => f.rest === 1 && !f.home, t => t.rest === 1 && !t.home],
+    ['Back-to-back at home', f => f.rest === 1 && f.home, t => t.rest === 1 && t.home],
+    ['Road game 3+ on a back-to-back', f => f.rest === 1 && !f.home && f.road >= 3, t => t.rest === 1 && !t.home && t.road >= 3],
+    ['Home after 2+ days off', f => f.home && f.rest >= 3, t => t.home && t.rest >= 3],
+    ['Flew east on a back-to-back', f => f.rest === 1 && f.tz != null && f.tz >= 1, t => t.rest === 1 && t.tz != null && t.tz >= 1],
+  ];
+  const rows = SP.map(([lab, fn, tfn]) => {
+    const gs = p.games.filter(g => { const f = F.get(g); return f && f.rest != null && fn(f, g); });
+    if (lab !== 'All games' && !gs.length) return '';
+    const now = !!(tn && tfn && tfn(tn));
+    const cells = cols.map(k => { if (!gs.length) return '<td class="r meta">—</td>';
+      const v = mean(gs.map(g => statVal(g, k))), rel = mean(gs.map(g => { const a = avg[seasonOf(g.d)][k]; return a >= .5 ? statVal(g, k)/a - 1 : 0; }));
+      const c = lab === 'All games' || gs.length < 3 ? '' : rel >= .06 ? 'pos' : rel <= -.06 ? 'neg' : '';
+      return `<td class="r"><span class="sv ${c}">${f1(v)}</span>${lab === 'All games' ? '' : `<span class="sd ${c}">${rel >= 0 ? '+' : ''}${(rel*100).toFixed(0)}%</span>`}</td>`; }).join('');
+    const mins = SHOWMIN && gs.length ? f1(mean(gs.map(g => +g.min || 0))) : '—';
+    const h = hitInfo(gs.map(g => statVal(g, S.stat)), S.line, S.side), n = h.h + h.m;
+    return `<tr class="${now ? 'tn' : ''}"><td><b>${esc(lab)}</b>${now ? ' <span class="pf-pill n" style="margin:0 0 0 4px;padding:1px 6px">tonight</span>' : ''}</td><td class="r meta">${gs.length}</td>${SHOWMIN ? `<td class="r">${mins}</td>` : ''}${cells}
+      <td class="r ${n >= 3 ? (h.h/n >= .6 ? 'pos' : h.h/n < .45 ? 'neg' : '') : ''}"><b>${n ? `${h.h}/${n}` : '—'}</b>${n ? `<span class="sd">${pct(h.h/n)}</span>` : ''}</td></tr>`; }).join('');
+  const tnTxt = !tn ? 'No game on the next slate.' : [tn.rest === 1 ? 'back-to-back' : `${tn.rest - 1} day${tn.rest === 2 ? '' : 's'} off`, tn.home ? 'at home' : `road game ${tn.road}`, `${tn.g7} games in 7 days`, tn.tz ? `${Math.abs(tn.tz)} zone${Math.abs(tn.tz) > 1 ? 's' : ''} ${tn.tz > 0 ? 'east' : 'west'}` : ''].filter(Boolean).join(', ');
+  return `<div class="pf-h3"><b>${esc(p.name)} by schedule spot</b><span class="meta">Tonight: ${esc(tnTxt)}</span></div>
+    <p class="meta" style="font-size:12px;margin:0 0 8px">His average in each spot, and how that compares to his usual that season (green = 6%+ better, red = 6%+ worse). Last column: how often he went ${S.side} ${S.line} ${esc(S.stat)} in those games. Highlighted rows are the spots he’s in tonight. Fewer than 5 games is a small sample.</p>
+    <div class="ss-wrap"><table class="pft ss-t"><thead><tr><th>Spot</th><th class="r">G</th>${SHOWMIN ? '<th class="r">Min</th>' : ''}${cols.map(k => `<th class="r">${esc(k)}</th>`).join('')}<th class="r">${S.side === 'over' ? 'O' : 'U'} ${S.line}</th></tr></thead><tbody>${rows}</tbody></table></div>`;
 }
 // The owner's lab is also published to a shared spot, so everyone with the link sees the same strategy stats
 const LAB_PUBLIC = 'public/labmeta/days';
