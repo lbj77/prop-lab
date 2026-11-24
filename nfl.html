@@ -876,6 +876,17 @@ main{padding-bottom:90px}
 .ss-wrap{overflow-x:auto;max-width:100%}
 .pf>*,.pf-r>*,.pf-body{min-width:0}
 @media(max-width:560px){.ss-t td,.ss-t th{padding:7px 5px;font-size:13px}.ss-t td:first-child{white-space:normal;min-width:120px}}
+.mu-v{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border-radius:12px;border:1px solid var(--line);background:var(--panel2);margin:10px 0}
+.mu-v .tag{flex:none;font-weight:900;font-size:12px;letter-spacing:.05em;padding:4px 9px;border-radius:8px;color:#08121d}
+.mu-v .tag.g{background:var(--over)}.mu-v .tag.r{background:var(--under)}.mu-v .tag.n{background:var(--warn)}.mu-v .tag.x{background:var(--muted)}
+.mu-v p{margin:0;font-size:12.5px;line-height:1.45}
+.mu-sig{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin:0 0 8px}
+.mu-sig div{border:1px solid var(--line);border-radius:10px;padding:6px 8px;min-width:0}
+.mu-sig small{display:block;color:var(--muted);font-size:10.5px;text-transform:uppercase;letter-spacing:.04em}
+.mu-sig b{font-size:13px}
+.mu-t td,.mu-t th{white-space:nowrap}
+.mu-t tr.out td{opacity:.5}
+.mu-t tr.tot td{border-top:1px solid var(--line);font-weight:700}
 .sc-fix{margin-top:10px;padding:12px;border-radius:12px;background:var(--over-soft);font-size:16px;line-height:1.45}
 
 .an-chart{margin:14px 0 6px;padding-top:14px;border-top:1px solid var(--line)}
@@ -1882,7 +1893,7 @@ function validate(d){
   const players = d.players.filter(p => p && p.name && Array.isArray(p.games) && p.games.length).map((p,i) => ({
     id: String(p.id ?? 'p'+i), name:String(p.name), team:String(p.team||''), pos:String(p.pos||''), status: p.status ? String(p.status) : '', prevTeam: p.prev_team ? String(p.prev_team) : '',
     next: p.next && p.next.opp ? {opp:String(p.next.opp), home:!!p.next.home, date:String(p.next.date||''), time:String(p.next.time||''), total: isFinite(+p.next.total) && p.next.total !== null && p.next.total !== '' ? +p.next.total : null} : null,
-    lines: normLines(p.lines),
+    lines: normLines(p.lines), mu: p.mu && typeof p.mu === "object" && Array.isArray(p.mu.defs) ? p.mu : null,
     games: p.games.filter(g => g && g.d).map(g => { const o = {d:String(g.d).slice(0,10), opp:String(g.opp||''), h:g.h?1:0, tm: g.tm ? String(g.tm) : '', min: SHOWMIN ? (+g.min||0) : 60}; BASE.forEach(f => o[f] = +g[f]||0); return o; })
                 .sort((a,b) => a.d < b.d ? 1 : -1)
   })).filter(p => p.games.length);
@@ -2462,6 +2473,91 @@ function renderPfTop(p){
     : '<p class="meta">No past lines saved for this player and stat yet. They build up as the Strategy lab records each day.</p>';
 }
 
+/* ---------- who guards him: individual defender matchups (NBA tracking) vs the team matchup and H2H ---------- */
+function muMode(k){ return ['PTS','3PM','PRA','PR','PA'].includes(k) ? 'pts' : ['AST','RA'].includes(k) ? 'ast' : ''; }
+function muGrade(v, cut){ return v == null || !isFinite(v) ? null : v >= cut ? 'soft' : v <= -cut ? 'tough' : 'neutral'; }
+function h2hInfo(p, opp, k){
+  const vs = p.games.filter(g => g.opp === opp), bySea = {};
+  p.games.forEach(g => (bySea[seasonOf(g.d)] = bySea[seasonOf(g.d)] || []).push(g));
+  const sAvg = {}; Object.entries(bySea).forEach(([y, gs]) => sAvg[y] = mean(gs.map(g => statVal(g, k))));
+  const rels = vs.map(g => { const a = sAvg[seasonOf(g.d)]; return a >= .5 ? statVal(g, k)/a - 1 : null; }).filter(v => v != null);
+  const rel = rels.length ? mean(rels) : null, cs = curSeason(), avgNow = sAvg[cs] != null ? sAvg[cs] : mean(p.games.map(g => statVal(g, k)));
+  // small-count stats (goals, 0.5 lines): % swings are noise, so judge H2H by how often he cleared tonight's line vs how often he does overall
+  let grade = null, hr = null;
+  if (rels.length >= 3) {
+    if (avgNow >= 3) grade = muGrade(rel*100, 8);
+    else { const a = hitInfo(vs.map(g => statVal(g, k)), S.line, 'over'), b = hitInfo(p.games.map(g => statVal(g, k)), S.line, 'over');
+      if (a.h + a.m >= 3 && b.h + b.m) { hr = a.h/(a.h + a.m) - b.h/(b.h + b.m); grade = muGrade(hr*100, 20); } }
+  }
+  return {vs, rel, hr, n: rels.length, grade};
+}
+function muInfo(p, opp, k){
+  const m = p.mu; if (!m || m.opp !== opp || !m.defs || !m.defs.length) return null;
+  let cur = m.defs.filter(d => d.r); if (!cur.length) cur = m.defs; cur = cur.slice(0, 4);
+  const rows = cur.map(d => ({...d, out: isOut(String(d.id)), p100: d.poss ? 100*d.pts/d.poss : 0, a100: d.poss ? 100*d.ast/d.poss : 0, t100: d.poss ? 100*d.tov/d.poss : 0}));
+  const tot = rows.reduce((s, d) => s + d.poss, 0); rows.forEach(d => d.share = tot ? d.poss/tot : 0);
+  let act = rows.filter(d => !d.out); if (!act.length) act = rows;
+  const at = act.reduce((s, d) => s + d.poss, 0), wsh = d => at ? d.poss/at : 0;
+  const mode = muMode(k);
+  const edge = mode === 'pts' && m.base ? act.reduce((s, d) => s + wsh(d)*d.p100, 0) - m.base
+             : mode === 'ast' && m.base_ast ? act.reduce((s, d) => s + wsh(d)*d.a100, 0) - m.base_ast : null;
+  return {m, rows, mode, edge, grade: edge == null ? null : muGrade(edge, mode === 'ast' ? 1.5 : 4), rposs: rows.reduce((s, d) => s + (d.rp || d.poss), 0)};
+}
+// put the three signals together: defenders, team defense on this stat, his games vs this team
+function muVerdict(p, opp, k){
+  const I = muInfo(p, opp, k), d = defText(opp, k), H = h2hInfo(p, opp, k);
+  const team = d ? muGrade(d.v, 4) : null;
+  const sig = [['Defenders', I && I.grade], ['Team D', team], ['H2H', H.grade]].filter(x => x[1]);
+  const dir = g => g === 'soft' ? 1 : g === 'tough' ? -1 : 0, ds = sig.map(x => dir(x[1]));
+  const pos = ds.filter(v => v > 0).length, neg = ds.filter(v => v < 0).length;
+  let status, lean = '';
+  if (!sig.length) status = 'no data';
+  else if (pos && neg) status = 'conflict';
+  else if (!pos && !neg) status = 'no edge';
+  else { lean = pos ? 'over' : 'under'; status = (pos || neg) >= 2 ? 'aligned' : 'lean'; }
+  return {I, d, H, team, sig, status, lean};
+}
+function muHtml(p, opp){
+  const k = S.stat, V = muVerdict(p, opp, k), I = V.I, H = V.H, side = S.side;
+  const gtxt = g => g === 'soft' ? 'soft' : g === 'tough' ? 'tough' : g === 'neutral' ? 'neutral' : '—';
+  const gcls = g => !g || g === 'neutral' ? '' : (g === 'soft') === (side === 'over') ? 'pos' : 'neg';
+  const tagCls = V.status === 'conflict' ? 'r' : V.lean ? (V.lean === side ? 'g' : 'r') : V.status === 'no data' ? 'x' : 'n';
+  const tagTxt = V.status === 'aligned' ? `ALIGNED · ${V.lean.toUpperCase()}` : V.status === 'lean' ? `LEAN ${V.lean.toUpperCase()}` : V.status === 'conflict' ? 'CONFLICT' : V.status === 'no edge' ? 'NO EDGE' : 'NO DATA';
+  const why = V.status === 'conflict' ? 'The signals point opposite ways. Pass or bet smaller.'
+    : V.status === 'aligned' ? `Everything points ${V.lean}. ${V.lean === side ? `That backs your ${side}.` : `You're on the ${side}, against it.`}`
+    : V.status === 'lean' ? `One signal says ${V.lean}, the rest are neutral. ${V.lean === side ? `Mild support for your ${side}.` : `Mildly against your ${side}.`}`
+    : V.status === 'no edge' ? 'Nothing here moves the needle either way.' : 'Not enough data yet.';
+  const modeNote = NBA && !muMode(k) ? ` Defender data only covers scoring and passing, so for ${esc(k)} it's team D + H2H.` : '';
+  const sigBox = `<div class="mu-sig" ${NBA ? '' : 'style="grid-template-columns:repeat(2,minmax(0,1fr))"'}>
+    ${!NBA ? '' : `<div><small>Defenders</small><b class="${gcls(I && I.grade)}">${!NBA ? '—' : !I ? 'no data' : I.edge == null ? 'n/a' : `${gtxt(I.grade)} ${I.edge >= 0 ? '+' : ''}${I.edge.toFixed(1)}`}</b>${I && I.edge != null ? `<span class="meta" style="font-size:10.5px"> /100 ${I.mode === 'ast' ? 'ast' : 'pts'}</span>` : ''}</div>`}
+    <div><small>Team D on ${esc(k)}</small><b class="${gcls(V.team)}">${V.d ? `${gtxt(V.team)} ${V.d.sv}` : '—'}</b></div>
+    <div><small>H2H vs ${esc(opp)}</small><b class="${gcls(H.grade)}">${H.n ? `${H.grade ? gtxt(H.grade) : 'few games'} ${H.hr != null ? `${H.hr >= 0 ? '+' : ''}${Math.round(H.hr*100)} pts over-rate` : `${H.rel >= 0 ? '+' : ''}${(H.rel*100).toFixed(0)}%`}` : 'none'}</b>${H.n ? `<span class="meta" style="font-size:10.5px"> ${H.n}g</span>` : ''}</div></div>`;
+  const verdict = `<div class="mu-v"><span class="tag ${tagCls}">${tagTxt}</span><p>${why}${modeNote}</p></div>`;
+  let defs = '';
+  if (NBA) {
+    if (!I) defs = `<p class="meta" style="font-size:12px">${p.mu && p.mu.opp !== opp ? 'Defender data is from an older slate. It refreshes with the next full NBA build.' : `No defender sample vs ${esc(opp)} yet (needs 15+ possessions this season or last). It comes from the full NBA build, not lines-only refreshes.`}</p>`;
+    else {
+      const base = I.m.base, small = I.rposs < 150;
+      defs = `<div class="pf-h3" style="margin-top:4px"><b>Who guards him on ${esc(opp)}</b><span class="meta">${base ? `his norm ${base} pts/100` : ''}</span></div>
+      <div class="ss-wrap"><table class="pft mu-t"><thead><tr><th>Defender</th><th class="r">Share</th><th class="r">Poss</th><th class="r">PTS/100</th><th class="r">vs norm</th><th class="r">FG</th><th class="r">3PT</th><th class="r">AST/100</th><th class="r">TOV/100</th></tr></thead><tbody>${I.rows.map(d => {
+        const df = base ? d.p100 - base : null, c = df == null || Math.abs(df) < 4 ? '' : (df > 0) === (side === 'over') ? 'pos' : 'neg', sh = d.sh || [Math.round(d.fgm), Math.round(d.fga), Math.round(d.f3m), Math.round(d.f3a)];
+        return `<tr class="${d.out ? 'out' : ''}"><td><b>${esc(d.n)}</b>${d.pos ? ` <span class="meta">${esc(d.pos)}</span>` : ''}${d.out ? ' <span class="pf-pill r" style="margin:0 0 0 4px;padding:1px 6px">out</span>' : ''}</td><td class="r"><b>${Math.round(d.share*100)}%</b></td><td class="r meta">${Math.round(d.rp || d.poss)}</td><td class="r">${d.p100.toFixed(1)}</td><td class="r"><b class="${c}">${df == null ? '—' : (df >= 0 ? '+' : '') + df.toFixed(1)}</b></td><td class="r">${sh[0]}/${sh[1]}</td><td class="r">${sh[2]}/${sh[3]}</td><td class="r">${d.a100.toFixed(1)}</td><td class="r">${d.t100.toFixed(1)}</td></tr>`; }).join('')}</tbody></table></div>
+      <p class="meta" style="font-size:11.5px;margin:6px 0 0">NBA tracking: every possession one of these players was his main defender, this season plus last (last season counts half). Share = how often each guards him. vs norm = points per 100 compared to his usual ${base || '?'}; ±4 counts as soft/tough.${I.rows.some(d => d.out) ? ' Players marked out are left out of the verdict.' : ''}${small ? ' <b>Small sample</b>: under 150 possessions in total, so treat it as a hint.' : ''} Rebounds aren't credited to a defender; see the H2H games below for those.</p>`;
+    }
+  }
+  return `<div class="pf-h3" style="margin-top:12px"><b>Matchup check: ${esc(k)} ${side}</b></div>${sigBox}${verdict}${defs}`;
+}
+function h2hHtml(p, opp){
+  const vs = p.games.filter(g => g.opp === opp);
+  if (!vs.length) return `<p class="meta" style="margin-top:8px">No past games vs ${esc(opp)} on file.</p>`;
+  const cols = (NBA ? ['PTS','REB','AST','3PM','PRA'] : CFG.main.slice(0, 5)).filter(k => STATS[k]); if (!cols.includes(S.stat) && STATS[S.stat]) cols.unshift(S.stat);
+  const cs = curSeason(), sea = p.games.filter(g => seasonOf(g.d) === cs), sa = sea.length ? sea : p.games;
+  const hit = (g, k) => { if (k !== S.stat) return ''; const v = statVal(g, k); return v === S.line ? '' : (S.side === 'over' ? v > S.line : v < S.line) ? 'pos' : 'neg'; };
+  const avgRow = (lab, gs, cls) => `<tr class="tot ${cls || ''}"><td>${lab}</td>${SHOWMIN ? `<td class="r meta">${Math.round(mean(gs.map(g => +g.min || 0)))}</td>` : ''}${cols.map(k => `<td class="r">${f1(mean(gs.map(g => statVal(g, k))))}</td>`).join('')}</tr>`;
+  return `<div class="pf-h3" style="margin-top:12px"><b>Games vs ${esc(opp)}</b><span class="meta">${vs.length} on file</span></div><div class="ss-wrap"><table class="pft mu-t"><thead><tr><th>Date</th>${SHOWMIN ? '<th class="r">Min</th>' : ''}${cols.map(k => `<th class="r" ${k === S.stat ? 'style="color:var(--ball)"' : ''}>${esc(k)}</th>`).join('')}</tr></thead><tbody>${vs.slice(0, 12).map(g =>
+    `<tr><td>${esc(fmtDate(g.d))} <span class="meta">${seaLabel(seasonOf(g.d))} ${g.h ? 'home' : 'away'}</span></td>${SHOWMIN ? `<td class="r meta">${Math.round(g.min)}</td>` : ''}${cols.map(k => `<td class="r"><b class="${hit(g, k)}">${statVal(g, k)}</b></td>`).join('')}</tr>`).join('')}
+    ${avgRow(`Avg vs ${esc(opp)}`, vs)}${avgRow(`${seaLabel(sa === sea ? cs : seasonOf(p.games[0].d))} average`, sa)}</tbody></table></div>`;
+}
 /* right side: matchup, defense vs position, shooting, similar players, injuries */
 const DVPC = {};
 function dvp(grp, season){
@@ -2489,8 +2585,8 @@ function renderPfCt(p){
       <div>${vs.length ? `<span class="pf-pill ${hitInfo(vs.map(g => statVal(g, S.stat)), S.line, S.side).pct >= .5 ? 'g' : 'r'}">${hitInfo(vs.map(g => statVal(g, S.stat)), S.line, S.side).h}/${vs.length} ${sideTxt.toLowerCase()} ${S.line} vs ${esc(opp)}</span>` : ''}
         <span class="pf-pill n">Model ${pct(r.prob)} ${sideTxt.toLowerCase()}</span><span class="pf-pill n">Proj ${f1(r.proj)}</span>${d ? `<span class="pf-pill ${Math.abs(d.v) < 3 ? 'n' : (S.side === 'over') === (d.v > 0) ? 'g' : 'r'}">${esc(opp)} D: ${d.sv}, ${d.rk}</span>` : ''}${r.nextRest === 1 ? '<span class="pf-pill r">Back-to-back</span>' : ''}</div>
       ${(() => { try { return schedPlayerHtml(p); } catch(e) { return ''; } })()}
-      ${vs.length ? `<table class="pft" style="margin-top:8px"><thead><tr><th>Date</th>${SHOWMIN ? '<th class="r">Min</th>' : ''}<th class="r">${esc(S.stat)}</th></tr></thead><tbody>${vs.slice(0, 12).map(g => { const v = statVal(g, S.stat), ok = v === S.line ? '' : (S.side === 'over' ? v > S.line : v < S.line) ? 'pos' : 'neg';
-        return `<tr><td>${esc(fmtDate(g.d))} <span class="meta">${seaLabel(seasonOf(g.d))} ${g.h ? 'home' : 'away'}</span></td>${SHOWMIN ? `<td class="r meta">${Math.round(g.min)}</td>` : ''}<td class="r"><b class="${ok}">${v}</b></td></tr>`; }).join('')}</tbody></table>` : `<p class="meta" style="margin-top:8px">No past games vs ${esc(opp)} on file.</p>`}`;
+      ${(() => { try { return muHtml(p, opp); } catch(e) { return ''; } })()}
+      ${h2hHtml(p, opp)}`;
   }
   if (S.pfTab === 'defense') {
     const cs = curSeason(); if (S.dvYr == null && opp && !dvp(grp, cs).by.szn.per[opp]) S.dvYr = 1;
