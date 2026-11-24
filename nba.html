@@ -1561,7 +1561,7 @@ details.inj{margin-top:22px!important}
       <p class="sub" id="labSub">Every day, Prop Lab records each player’s main lean on every stat, notes which strategies flag it, and grades it once the box scores come in. Stick with whatever wins.</p>
       <div class="stratbar"><label class="f" for="stratSel" style="margin:0">Best bets use</label><select class="ghost" id="stratSel"></select><span class="meta" id="stratNote"></span></div>
       <div id="stratMatches"></div>
-      <div class="ctrl-row"><div class="seg" id="labLtSeg" aria-label="Line type"><button data-llt="std">Standard lines</button><button data-llt="g">Goblins</button><button data-llt="d">Demons</button></div></div>
+      <div class="ctrl-row"><span class="f" style="margin:0;font-weight:800">Line type</span><span id="labLtSeg"><div class="seg lltSeg" aria-label="Line type"><button data-llt="std">Standard lines</button><button data-llt="g">Goblins</button><button data-llt="d">Demons</button></div></span><span class="meta">Switches the strategy table, combos and confluence</span></div>
       <div class="ctrl-row"><div class="seg" id="labPer"><button data-lp="7">Last 7 days</button><button data-lp="30">Last 30 days</button><button data-lp="0">All time</button></div><span class="meta" id="labInfo"></span></div>
       <div class="tbl-wrap"><table id="labTbl" class="res lab"></table></div>
       <div id="labLt"></div>
@@ -1569,6 +1569,7 @@ details.inj{margin-top:22px!important}
       <details class="fold" style="margin-top:18px"><summary>More: best combinations and how many strategies agree</summary>
       <h3 class="sec-h" style="font-size:20px;margin-top:16px">Best combinations</h3>
       <p class="meta" style="margin:0 0 8px">Pairs and trios of strategies, counted only when they all flag the same prop. <b>By grade</b> splits each record by Prop Lab’s A–D grade, so you can see whether the A’s are carrying a strategy while the C’s drag it down. Tap Use to filter your picks by it.</p>
+      <div class="ctrl-row"><span class="f" style="margin:0;font-weight:800">Line type</span><span id="comboLtSeg"><div class="seg lltSeg" aria-label="Line type"><button data-llt="std">Standard lines</button><button data-llt="g">Goblins</button><button data-llt="d">Demons</button></div></span></div>
       <div class="ctrl-row"><div class="seg" id="comboAll"><button data-ca="false">Top 10</button><button data-ca="true">Show all</button></div><span class="mini" style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted)">Min picks <span class="seg" id="comboMin"><button data-cm="1">1</button><button data-cm="12">12</button><button data-cm="30">30</button></span></span><span class="meta" id="comboCount"></span></div>
       <div class="tbl-wrap combo-wrap"><table id="comboTbl" class="res lab"></table></div>
       <h3 class="sec-h" style="font-size:20px;margin-top:22px">Confluence: how many agree</h3>
@@ -4029,7 +4030,7 @@ function renderLab(){
   const days0 = labDocs.filter(d => (!cut || d.date >= cut) && d.date <= today).sort((a,b) => a.date < b.date ? -1 : 1);
   // line type picked above the table: the whole Strategy lab (strategies, combos, confluence) switches to those picks
   const llt = lsGet(LSP+'labLt') || 'std';
-  $$('#labLtSeg button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.llt === llt)));
+  $$('.lltSeg button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.llt === llt)));
   const days = llt === 'std' ? days0 : days0.map(d => { const idx = (d.alt || []).map((row, i) => [row, i]).filter(([row]) => row.split('|')[14] === llt);
     return Object.assign({}, d, {rows: idx.map(([row]) => row), res: idx.map(([, i]) => (d.altRes || '')[i] || '.').join(''), clv: null, alt: [], altRes: ''}); });
   LAB_BYNAME = null;
@@ -5771,7 +5772,10 @@ $('#labPanel').addEventListener('click', e => {
 $('#calPanel').addEventListener('click', e => { if (e.target.closest('[data-learn]')) { S.learnOn = S.learnOn === false; lsSet(LSP+'learnOn', S.learnOn); renderAll(); toast(S.learnOn ? 'Learning model on' : 'Learning model off'); return; } if (!e.target.closest('[data-calib]')) return; S.calibOn = S.calibOn === false; lsSet(LSP+'calibOn', S.calibOn); renderAll(); toast(S.calibOn ? 'Model correction on' : 'Model correction off'); });
 $('#comboAll').addEventListener('click', e => { const b = e.target.closest('[data-ca]'); if (!b) return; lsSet(LSP+'comboAll', b.dataset.ca === 'true'); renderLab(); });
 $('#comboMin').addEventListener('click', e => { const b = e.target.closest('[data-cm]'); if (!b) return; lsSet(LSP+'comboMin', +b.dataset.cm); renderLab(); });
-$('#labLtSeg').addEventListener('click', e => { const b = e.target.closest('[data-llt]'); if (!b) return; lsSet(LSP+'labLt', b.dataset.llt); renderLab(); });
+['#labLtSeg','#comboLtSeg'].forEach(id => $(id).addEventListener('click', e => { const b = e.target.closest('[data-llt]'); if (!b) return; lsSet(LSP+'labLt', b.dataset.llt); renderLab(); }));
+/* the Shooting tile is basketball-only; other sports get their own name */
+{ const nm = {nhl:'Shots', nfl:'Targets', mlb:'Hitting'}[SPORT]; const b = $('[data-pc="shooting"]'); if (nm && b && b.lastChild) b.lastChild.textContent = nm;
+  const na = $('#zoneNA'); if (na) na.textContent = {nhl:'Shot map (where he shoots from vs where the goalie gives up goals) is coming next for hockey.', nfl:'Target map (short, deep, left, middle, right vs what the defense allows) is coming for football.', mlb:'Spray chart (pull, center, opposite field vs the pitcher) is coming for baseball before spring.'}[SPORT] || ''; }
 $('#labPer').addEventListener('click', e => { const b = e.target.closest('[data-lp]'); if (!b) return; lsSet(LSP+'labPer', +b.dataset.lp); renderLab(); });
 $('#pdfBtn').addEventListener('click', downloadBetsPdf);
 $('#resBtn').addEventListener('click', () => { const w = $('#resWrap'); w.hidden = !w.hidden; $('#resBtn').setAttribute('aria-expanded', !w.hidden); $('#resBtn').textContent = w.hidden ? 'Results table' : 'Hide results table'; if (!w.hidden) renderResultsTable(); });
