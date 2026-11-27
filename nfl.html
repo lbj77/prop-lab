@@ -884,6 +884,7 @@ main{padding-bottom:90px}
 .mu-sig div{border:1px solid var(--line);border-radius:10px;padding:6px 8px;min-width:0}
 .mu-sig small{display:block;color:var(--muted);font-size:10.5px;text-transform:uppercase;letter-spacing:.04em}
 .mu-sig b{font-size:13px}
+.mu-sig.n4{grid-template-columns:repeat(2,minmax(0,1fr))}
 .mu-t td,.mu-t th{white-space:nowrap}
 .mu-t tr.out td{opacity:.5}
 .mu-t tr.tot td{border-top:1px solid var(--line);font-weight:700}
@@ -2518,7 +2519,12 @@ function muInfo(p, opp, k){
 function muVerdict(p, opp, k){
   const I = muInfo(p, opp, k), d = defText(opp, k), H = h2hInfo(p, opp, k);
   const team = d ? muGrade(d.v, 4) : null;
-  const sig = [['Defenders', I && I.grade], ['Team D', team], ['H2H', H.grade]].filter(x => x[1]);
+  // defense vs his position (same ranks as the Defense tab): top third = tough, bottom third = soft
+  let posG = null, posTxt = '', posNm = '';
+  try { const grp = posGrp(p); if (grp && Object.keys(POSNM).length) { const cs = curSeason(); let D = dvp(grp, cs); if (!D.by.szn.per[opp]) D = dvp(grp, cs - 1);
+    const rk = D.by.szn.rk[opp] && D.by.szn.rk[opp][k]; posNm = POSNM[grp] || '';
+    if (rk) { posG = rk <= D.n/3 ? 'tough' : rk > 2*D.n/3 ? 'soft' : 'neutral'; posTxt = `${ordn(rk)} of ${D.n}`; } } } catch(e) {}
+  const sig = [['Defenders', I && I.grade], ['Team D', team], [`D vs ${posNm || 'position'}`, posG], ['H2H', H.grade]].filter(x => x[1]);
   const dir = g => g === 'soft' ? 1 : g === 'tough' ? -1 : 0, ds = sig.map(x => dir(x[1]));
   const pos = ds.filter(v => v > 0).length, neg = ds.filter(v => v < 0).length;
   let status, lean = '';
@@ -2526,7 +2532,7 @@ function muVerdict(p, opp, k){
   else if (pos && neg) status = 'conflict';
   else if (!pos && !neg) status = 'no edge';
   else { lean = pos ? 'over' : 'under'; status = (pos || neg) >= 2 ? 'aligned' : 'lean'; }
-  return {I, d, H, team, sig, status, lean};
+  return {I, d, H, team, pos: posG, posTxt, posNm, sig, status, lean};
 }
 function muHtml(p, opp){
   const k = S.stat, V = muVerdict(p, opp, k), I = V.I, H = V.H, side = S.side;
@@ -2535,13 +2541,16 @@ function muHtml(p, opp){
   const tagCls = V.status === 'conflict' ? 'r' : V.lean ? (V.lean === side ? 'g' : 'r') : V.status === 'no data' ? 'x' : 'n';
   const tagTxt = V.status === 'aligned' ? `ALIGNED · ${V.lean.toUpperCase()}` : V.status === 'lean' ? `LEAN ${V.lean.toUpperCase()}` : V.status === 'conflict' ? 'CONFLICT' : V.status === 'no edge' ? 'NO EDGE' : 'NO DATA';
   const why = V.status === 'conflict' ? 'The signals point opposite ways. Pass or bet smaller.'
-    : V.status === 'aligned' ? `Everything points ${V.lean}. ${V.lean === side ? `That backs your ${side}.` : `You're on the ${side}, against it.`}`
+    : V.status === 'aligned' ? `${V.sig.filter(x => x[1] === (V.lean === 'over' ? 'soft' : 'tough')).length} signals point ${V.lean}, none the other way. ${V.lean === side ? `That backs your ${side}.` : `You're on the ${side}, against it.`}`
     : V.status === 'lean' ? `One signal says ${V.lean}, the rest are neutral. ${V.lean === side ? `Mild support for your ${side}.` : `Mildly against your ${side}.`}`
     : V.status === 'no edge' ? 'Nothing here moves the needle either way.' : 'Not enough data yet.';
-  const modeNote = NBA && !muMode(k) ? ` Defender data only covers scoring and passing, so for ${esc(k)} it's team D + H2H.` : '';
-  const sigBox = `<div class="mu-sig" ${NBA ? '' : 'style="grid-template-columns:repeat(2,minmax(0,1fr))"'}>
+  const by = g => V.sig.filter(x => x[1] === g).map(x => x[0]).join(', ');
+  const which = [by('soft') && `Over: ${by('soft')}.`, by('tough') && `Under: ${by('tough')}.`].filter(Boolean).join(' ');
+  const modeNote = (which ? ' ' + esc(which) : '') + (NBA && !muMode(k) ? ` Defender data only covers scoring and passing, so for ${esc(k)} it's team D, position D and H2H.` : '');
+  const sigBox = `<div class="mu-sig ${NBA ? 'n4' : ''}">
     ${!NBA ? '' : `<div><small>Defenders</small><b class="${gcls(I && I.grade)}">${!NBA ? '—' : !I ? 'no data' : I.edge == null ? 'n/a' : `${gtxt(I.grade)} ${I.edge >= 0 ? '+' : ''}${I.edge.toFixed(1)}`}</b>${I && I.edge != null ? `<span class="meta" style="font-size:10.5px"> /100 ${I.mode === 'ast' ? 'ast' : 'pts'}</span>` : ''}</div>`}
     <div><small>Team D on ${esc(k)}</small><b class="${gcls(V.team)}">${V.d ? `${gtxt(V.team)} ${V.d.sv}` : '—'}</b></div>
+    <div><small>D vs ${esc(V.posNm || 'position')}</small><b class="${gcls(V.pos)}">${V.pos ? `${gtxt(V.pos)}` : '—'}</b>${V.posTxt ? `<span class="meta" style="font-size:10.5px"> ${esc(V.posTxt)}</span>` : ''}</div>
     <div><small>H2H vs ${esc(opp)}</small><b class="${gcls(H.grade)}">${H.n ? `${H.grade ? gtxt(H.grade) : 'few games'} ${H.hr != null ? `${H.hr >= 0 ? '+' : ''}${Math.round(H.hr*100)} pts over-rate` : `${H.rel >= 0 ? '+' : ''}${(H.rel*100).toFixed(0)}%`}` : 'none'}</b>${H.n ? `<span class="meta" style="font-size:10.5px"> ${H.n}g</span>` : ''}</div></div>`;
   const verdict = `<div class="mu-v"><span class="tag ${tagCls}">${tagTxt}</span><p>${why}${modeNote}</p></div>`;
   let defs = '';
