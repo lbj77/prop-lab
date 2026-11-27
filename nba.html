@@ -2623,7 +2623,16 @@ function dvp(grp, season){
   });
   return DVPC[key] = out;
 }
+// never leave the right panel blank: if something in it breaks, say what broke
 function renderPfCt(p){
+  try { renderPfCtInner(p); } catch(e) {
+    console.error('Player panel:', e);
+    const k = S.pfTab || 'matchup'; $$('#pfCt button').forEach(b => b.setAttribute('aria-pressed', b.dataset.pc === k));
+    ['matchup','defense','shooting','schedule','similar','injuries'].forEach(t => { const el = $('#pfC-' + t); if (el) el.hidden = t !== k; });
+    const el = $('#pfC-' + k); if (el) el.innerHTML = `<p class="meta">This panel hit an error for ${esc(p && p.name || 'this player')}: <b style="color:var(--under)">${esc(String(e && e.message || e))}</b>. Screenshot this and send it to Claude.</p>`;
+  }
+}
+function renderPfCtInner(p){
   $$('#pfCt button').forEach(b => b.setAttribute('aria-pressed', b.dataset.pc === S.pfTab));
   ['matchup','defense','shooting','schedule','similar','injuries'].forEach(k => { const el = $('#pfC-' + k); if (el) el.hidden = k !== S.pfTab; });
   const opp = p.next && p.next.opp, grp = S.simPos || posGrp(p), sideTxt = S.side === 'over' ? 'Over' : 'Under';
@@ -2851,7 +2860,7 @@ function renderAnalyzer(){
   const p = S.byId[S.pid]; if (!p) return;
   $$('#statChips .chip').forEach(b => { b.setAttribute('aria-pressed', b.dataset.k===S.stat); b.classList.toggle('dim', !entries(p, b.dataset.k).length); b.title = entries(p, b.dataset.k).length ? STATS[b.dataset.k].n : `${STATS[b.dataset.k].n}: no book line`; });
   $$('#sideSeg button').forEach(b => b.setAttribute('aria-pressed', b.dataset.v===S.side));
-  renderPfHead(p); renderPfTop(p); renderPfCt(p); $('#zoneNA').hidden = NBA;
+  try { renderPfHead(p); } catch(e) { console.error('Player head:', e); } try { renderPfTop(p); } catch(e) { console.error('Player chart:', e); } renderPfCt(p); $('#zoneNA').hidden = NBA;
   const nx = p.next ? `Next: <b>${p.next.home?'vs':'@'} ${esc(p.next.opp)}</b>${p.next.date?`, <b>${esc(gameWhen(p.next))}</b>`:''}` : 'No game found for the next slate';
   const all = p.games; const mins = NBA ? mean(all.slice(0,10).map(g=>g.min)) : NaN;
   $('#pMeta').innerHTML = `${isOut(p.id) ? '<b class="neg">Marked out tonight.</b> ' : p.status ? `<b>${esc(p.status)}.</b> ` : ''}${esc(p.team)}${p.prevTeam?` (new this season, was ${esc(p.prevTeam)})`:''}${p.pos?`, ${esc(p.pos)}`:''}. ${nx}. ${all.length} games on file${NBA ? `, ${f1(mins)} min a night lately` : ''}.`;
@@ -4362,7 +4371,18 @@ function betCard(s){
 }
 /* ---------- paste in bets (a JSON list of slips) ---------- */
 async function importBets(){
-  let arr; try { arr = JSON.parse($('#pasteTxt').value.trim()); } catch(e) { toast('That text isn’t in the right format. Copy all of it, including the [ and ].'); return; }
+  // phones add curly quotes, code-block fences or stray text around a paste; clean all of that up first
+  let raw = $('#pasteTxt').value.replace(/[“”„″]/g, '"').replace(/[‘’′]/g, "'").replace(/ /g, ' ').replace(/```[a-z]*/gi, '').trim();
+  const a0 = Math.min(...['[', '{'].map(c => raw.indexOf(c)).filter(i => i >= 0)), a1 = Math.max(raw.lastIndexOf(']'), raw.lastIndexOf('}'));
+  if (isFinite(a0) && a1 > a0) raw = raw.slice(a0, a1 + 1);
+  let arr; try { arr = JSON.parse(raw); } catch(e) {
+    // a cut-off paste: keep every complete slip before the cut
+    const ends = []; let dep = 0, inS = false, esc2 = false;
+    for (let i = 0; i < raw.length; i++) { const c = raw[i]; if (inS) { if (esc2) esc2 = false; else if (c === '\\') esc2 = true; else if (c === '"') inS = false; continue; }
+      if (c === '"') inS = true; else if (c === '{' || c === '[') dep++; else if (c === '}' || c === ']') { dep--; if (dep === 1 && c === '}') ends.push(i); } }
+    if (raw[0] === '[' && ends.length) { try { arr = JSON.parse(raw.slice(0, ends[ends.length - 1] + 1) + ']'); toast(`The paste was cut off. Importing the ${arr.length} complete bet${arr.length === 1 ? '' : 's'}; paste the rest next.`); } catch(e2) {} }
+    if (!arr) { toast('That text isn’t in the right format. Copy all of it, including the [ and ].'); return; }
+  }
   if (!Array.isArray(arr)) arr = arr && Array.isArray(arr.slips) ? arr.slips : [arr];
   let added = 0, skipped = 0;
   for (const x of arr) {
