@@ -2263,8 +2263,19 @@ function renderStale(){
       <span class="meta">${esc(bookName(x.bk.book))}${x.bk.dfs ? ' pick\u2019em' : ` ${fmtOdds(x.odds)}`}. Pinnacle: ${sl ? `line ${x.sharpLine}, ` : ''}fair ${pct(x.fair)} for this ${x.side}</span></span>
       <span class="pp">${pct(x.fair)}</span><span class="pe pos">+${(x.edge*100).toFixed(1)}%</span></button>`; }).join('');
 }
-function entries(p, stat){ const L = p.lines && p.lines[stat]; if (!L || !L.books) return []; return Object.entries(L.books).filter(([b]) => !REF_BOOKS.has(baseBook(b))).map(([b,x]) => ({book:b, base:baseBook(b), line:x.line, over:x.over, under:x.under, dfs:DFS.has(b), alt:!!x.alt || isAlt(b), mod:x.mod || ''})); }
-function priceOf(e, side){ if (e.mod) return null; if (e.s && !e.s.includes(side[0])) return null; if (e.dfs && !e.alt) return decToAm(1/dfsBE(3)); const v = side==='over' ? e.over : e.under; return v && isFinite(v) ? v : null; }
+function entries(p, stat){ const L = p.lines && p.lines[stat]; if (!L || !L.books) return []; return Object.entries(L.books).filter(([b]) => !REF_BOOKS.has(baseBook(b))).map(([b,x]) => ({book:b, base:baseBook(b), line:x.line, over:x.over, under:x.under, dfs:DFS.has(b), alt:!!x.alt || isAlt(b), mod:x.mod || '', ...(x.s ? {s:x.s} : {})})); }
+// goblins and demons can only be played over; everything else only on the sides the app actually posted
+const sideOpen = (e, side) => !(e.mod && side === 'under') && !(e.s && !e.s.includes(side[0]));
+// can this exact pick be played on PrizePicks? (ok / why not)
+function ppInfo(p, k, line, side){
+  const es = entries(p, k).filter(e => e.base === 'prizepicks'); if (!es.length) return {ok: false, why: 'Not on PrizePicks'};
+  if (es.some(e => !e.mod && e.line === +line && sideOpen(e, side))) return {ok: true, why: 'On PrizePicks'};
+  const std = es.find(e => !e.mod), mods = es.filter(e => e.mod && e.line === +line);
+  if (mods.length) return {ok: false, why: side === 'under' ? `PrizePicks ${line} is a ${mods[0].mod}: over only, no under` : `PrizePicks only has ${line} as a ${mods[0].mod}, not a standard line`};
+  if (std && std.line === +line) return {ok: false, why: `PrizePicks has no ${side} on this one`};
+  return {ok: false, why: std ? `PrizePicks line is ${std.line}` : 'PrizePicks only has goblin/demon lines (over only)'};
+}
+function priceOf(e, side){ if (e.mod) return null; if (!sideOpen(e, side)) return null; if (e.dfs && !e.alt) return decToAm(1/dfsBE(3)); const v = side==='over' ? e.over : e.under; return v && isFinite(v) ? v : null; }
 // anytime-TD unders (0.5) are rarely offered and are a trap to rank: skip them
 const sideOK = (k, line, side) => NBA || !(YESNO.includes(k) && side === 'under' && +line <= .5);
 function chooseLine(p, stat, side, book){
@@ -2454,7 +2465,7 @@ const bkLogo = b => { const base = baseBook(b), n = BOOKN[base] || base; const a
 const PARTS = {PRA:['PTS','REB','AST'], PR:['PTS','REB'], PA:['PTS','AST'], RA:['REB','AST'], 'S+B':['STL','BLK']};
 const partsOf = k => (PARTS[k] || []).every(x => STATS[x]) ? (PARTS[k] || []) : [];
 const daysAgo = d => { const n = Math.round((new Date(ymd(new Date()) + 'T12:00:00') - new Date(d + 'T12:00:00'))/864e5); return n <= 0 ? 'Today' : n === 1 ? 'Yesterday' : `${n} days ago`; };
-S.sea = 'all'; S.teamF = 'all'; S.pfTop = 'move'; S.pfTab = lsGet(LSP+'pfTab') || 'matchup'; S.simPos = ''; S.dvYr = null;
+S.sea = 'all'; S.teamF = 'all'; S.pfTop = 'move'; S.pfTab = lsGet(LSP+'pfTab') || 'matchup'; S.dpPP = lsGet(LSP+'dpPP') !== false; S.simPos = ''; S.dvYr = null;
 
 function pfBase(p){
   let gs = gamesFor(p, {minMin: S.minMin, venue: S.venue});
@@ -3876,7 +3887,7 @@ function schedAdj(p, k, side){
 /* ---------- Prop Lab picks: model chance + proven strategies + schedule, one per player ---------- */
 let DP = {key: '', list: []};
 function dailyPicks(){
-  const key = [(S.data && S.data.generated) || '', S.book, labDocs.length, S.players.length].join('|');
+  const key = [(S.data && S.data.generated) || '', S.book, labDocs.length, S.players.length, S.dpPP].join('|');
   if (DP.key === key) return DP.list;
   const anyNext = S.players.some(p => p.next), pool = S.players.filter(p => (!anyNext || (p.next && onDay(p))) && !isOut(p.id) && p.lines);
   const best = {};
@@ -3886,9 +3897,10 @@ function dailyPicks(){
       if (!sideOK(k, p.lines[k].line, side)) continue;
       const L = p.lines[k], es = entries(p, k).filter(e => !e.alt && !e.mod && e.line === +L.line && (S.book === 'any' || e.base === S.book)); if (!es.length) continue;
       let c = null; es.forEach(e => { const pr = priceOf(e, side); if (pr == null || !isFinite(pr)) return; if (!c || amToDec(pr) > amToDec(c.odds)) c = {odds: pr, book: e.book}; });
-      if (!c) continue; c.line = +L.line; c.apps = [...new Set(es.map(e => e.base))]; try { c.r = evalProp(p, k, c.line, side); } catch(e) { continue; }
+      if (!c) continue; c.line = +L.line; c.apps = [...new Set(es.filter(e => priceOf(e, side) != null).map(e => e.base))];
+      const pp = ppInfo(p, k, c.line, side); if (S.dpPP && !pp.ok) continue; try { c.r = evalProp(p, k, c.line, side); } catch(e) { continue; }
       const r = c.r; if (r.L10.h + r.L10.m < 8 || c.odds < -250) continue;
-      const x = {p, k, line: c.line, side, odds: c.odds, book: true, bk: c.book, apps: c.apps, r, edge: r.prob - implied(c.odds), score: r.score};
+      const x = {p, k, line: c.line, side, odds: c.odds, book: true, bk: c.book, apps: c.apps, pp, r, edge: r.prob - implied(c.odds), score: r.score};
       let fits = []; try { fits = fitsAll(x); } catch(e) {}
       const proven = fits.filter(f => f.proven), top = fits[0];
       const strat = proven.length ? Math.min(.04, .01*proven.length) : top && top.rec.n >= 50 && top.rec.roi > 0 ? .005 : 0;
@@ -3904,7 +3916,7 @@ function dailyPicks(){
 function renderDailyPicks(){
   const box = $('#pjPicks'); if (!box) return;
   let list = []; try { list = dailyPicks(); } catch(e) { box.innerHTML = ''; return; }
-  if (!list.length) { box.innerHTML = `<details class="dp-wrap" open><summary>Prop Lab picks for today</summary><p class="meta" style="margin:8px 0 0">No picks clear the bar right now: 58%+ after schedule, a proven strategy (or one with a winning record on 50+ picks) and a fair price. That’s a fine answer. Check back after the next line refresh.</p></details>`; return; }
+  if (!list.length) { box.innerHTML = `<details class="dp-wrap" open><summary>Prop Lab picks for today</summary><p class="meta" style="margin:8px 0 0">${S.dpPP ? '<label class="meta" style="display:flex;gap:8px;align-items:center;margin:0 0 6px"><input type="checkbox" id="dpPP" checked style="width:auto"> Only picks I can play on PrizePicks</label>' : ''}No picks clear the bar right now${S.dpPP ? ' on PrizePicks' : ''}: 58%+ after schedule, a proven strategy (or one with a winning record on 50+ picks) and a fair price. That’s a fine answer. Check back after the next line refresh.</p></details>`; const pc = $('#dpPP'); if (pc) pc.addEventListener('change', e => { S.dpPP = e.target.checked; lsSet(LSP+'dpPP', S.dpPP); renderDailyPicks(); }); return; }
   const sw = (x) => (x.p && SPORT) ? statWord(x.k) : x.k;
   const card = (o, i) => { const x = o.x, inS = S.slip.some(l => mine(l) && l.pid === x.p.id && l.stat === x.k && l.side === x.side);
     const tags = [...o.proven.slice(0, 2).map(f => `<span class="dp-tag g">${esc(f.n)} ${pct(f.rec.wp)} on ${f.rec.n}</span>`),
@@ -3913,7 +3925,7 @@ function renderDailyPicks(){
       x.r.dfac && isFinite(x.r.dfac) && Math.abs(x.r.dfac - 1) >= .05 ? `<span class="dp-tag ${(x.side === 'over') === (x.r.dfac > 1) ? 'g' : 'r'}">${esc(x.p.next ? x.p.next.opp : '')} D ${x.r.dfac > 1 ? 'soft' : 'tough'}</span>` : '',
       x.r.oa && Math.abs(x.r.oa.adj) >= 1 ? '<span class="dp-tag b">Teammate out</span>' : ''].filter(Boolean).join('');
     return `<div class="dp"><div class="dp-h"><div><b>${esc(x.p.name)}</b> <span class="meta">${esc(x.p.team)}${x.p.next ? ` ${x.p.next.home ? 'vs' : '@'} ${esc(x.p.next.opp)}` : ''}</span>
-        <div class="dp-pick"><span class="${x.side === 'over' ? 'o' : 'u'}">${x.side === 'over' ? 'Over' : 'Under'}</span> ${x.line} ${esc(sw(x))} </div><div class="meta" style="font-size:12px">Standard line on ${esc((x.apps || []).map(b => BOOKN[b] || b).slice(0, 5).join(', '))}${x.odds && !DFS.has(baseBook(x.bk || '')) ? ` · best price ${fmtOdds(x.odds)} ${esc(bookName(x.bk))}` : ''}</div></div>
+        <div class="dp-pick"><span class="${x.side === 'over' ? 'o' : 'u'}">${x.side === 'over' ? 'Over' : 'Under'}</span> ${x.line} ${esc(sw(x))} </div>${x.pp ? `<div style="font-size:12px;font-weight:700;color:${x.pp.ok ? 'var(--over)' : 'var(--under)'}">${x.pp.ok ? '✓' : '✕'} ${esc(x.pp.why)}</div>` : ''}<div class="meta" style="font-size:12px">${x.side === 'over' ? 'Over' : 'Under'} offered on ${esc((x.apps || []).map(b => BOOKN[b] || b).slice(0, 5).join(', '))}${x.odds && !DFS.has(baseBook(x.bk || '')) ? ` · best price ${fmtOdds(x.odds)} ${esc(bookName(x.bk))}` : ''}</div></div>
       <div class="dp-ai">${pct(o.fin)}<small>Prop Lab chance</small></div></div>
       <div class="dp-tags">${tags}</div>
       <div style="display:flex;gap:6px"><button class="add ${inS ? 'on' : ''}" data-dpadd="${i}">${inS ? 'In parlay' : '+ Add'}</button><button class="ghost" data-dpopen="${i}" style="width:auto;padding:4px 10px">Open player</button></div></div>`; };
@@ -3923,6 +3935,7 @@ function renderDailyPicks(){
   const be = {2: 1/3, 3: 1/5}, beLeg = n => Math.pow(be[n], 1/n);
   box.innerHTML = `<details class="dp-wrap" ${S.dpOpen === false ? '' : 'open'} id="dpFold"><summary>Prop Lab picks for today (${list.length})</summary>
     <p class="meta" style="margin:8px 0 0">Picks where the model, the strategies that are actually winning in your Strategy lab, and tonight’s schedule all agree. Prop Lab chance = model chance, adjusted for rest, travel and road trips, plus a small bump for proven strategies. Standard lines only${S.book !== 'any' ? `, ${esc(bookName(S.book))} lines` : ''}.</p>
+    <label class="meta" style="display:flex;gap:8px;align-items:center;margin:8px 0 0;font-size:13px;cursor:pointer"><input type="checkbox" id="dpPP" ${S.dpPP ? 'checked' : ''} style="width:auto"> Only picks I can play on PrizePicks (standard line, that side offered)</label>
     <div class="dp-list">${list.map(card).join('')}</div>
     ${slips.length ? `<div class="dp-slips">${slips.map((sl, j) => { const ch = sl.reduce((m, o) => m*o.fin, 1), n = sl.length;
       return `<div class="dp-slip"><b>Suggested ${n}-pick</b> <span class="meta">(different games)</span><div style="margin:4px 0">${sl.map(o => `${esc(o.x.p.name)} ${o.x.side === 'over' ? 'O' : 'U'} ${o.x.line} ${esc(o.x.k)}`).join(' · ')}</div>
@@ -3931,6 +3944,7 @@ function renderDailyPicks(){
   </details>`;
   DP.slips = slips;
   const fd = $('#dpFold'); if (fd) fd.addEventListener('toggle', e => { S.dpOpen = e.target.open; });
+  const pc = $('#dpPP'); if (pc) pc.addEventListener('change', e => { S.dpPP = e.target.checked; lsSet(LSP+'dpPP', S.dpPP); renderDailyPicks(); });
 }
 /* ---------- Player tab: tonight's schedule spot and how HE has done in it ---------- */
 function schedPlayerHtml(p){
